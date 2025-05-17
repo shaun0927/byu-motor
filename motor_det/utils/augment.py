@@ -72,3 +72,29 @@ def random_crop_around_point(
 
     patch = np.asarray(volume[z0:z1, y0:y1, x0:x1], dtype=np.uint8)
     return patch, (z0, y0, x0)
+
+
+def random_erase3d(volume: np.ndarray, max_ratio: float = 0.3) -> np.ndarray:
+    """Randomly erase a cuboid region in ``volume``."""
+    if np.random.rand() < 0.5:
+        D, H, W = volume.shape
+        ratio = np.random.uniform(0.1, max_ratio)
+        dz, dy, dx = (
+            max(1, int(D * ratio)),
+            max(1, int(H * ratio)),
+            max(1, int(W * ratio)),
+        )
+        z0 = np.random.randint(0, max(1, D - dz + 1))
+        y0 = np.random.randint(0, max(1, H - dy + 1))
+        x0 = np.random.randint(0, max(1, W - dx + 1))
+        volume[z0 : z0 + dz, y0 : y0 + dy, x0 : x0 + dx] = 0
+    return volume
+
+
+def random_gaussian_noise(volume: np.ndarray, std: float = 5.0) -> np.ndarray:
+    """Additive Gaussian noise with probability 0.5."""
+    if np.random.rand() < 0.5:
+        noise = np.random.normal(0.0, std, size=volume.shape)
+        volume = volume.astype(np.float32) + noise
+        volume = np.clip(volume, 0, 255).astype(np.uint8)
+    return volume

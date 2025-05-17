@@ -8,7 +8,12 @@ from torch.utils.data import Dataset
 import zarr
 
 from motor_det.utils.target import build_target_maps
-from motor_det.utils.augment import random_flip3d, random_crop_around_point
+from motor_det.utils.augment import (
+    random_flip3d,
+    random_crop_around_point,
+    random_erase3d,
+    random_gaussian_noise,
+)
 
 
 class MotorTrainDataset(Dataset):
@@ -37,7 +42,10 @@ class MotorTrainDataset(Dataset):
         self.neg_ratio = negative_ratio
 
     def __len__(self):
-        return max(2 * len(self.centers), 64)
+        # dataset length proportional to number of positive centres
+        n_pos = len(self.centers)
+        n_total = int(n_pos * (1 + self.neg_ratio))
+        return max(n_total, 64)
 
     def __getitem__(self, idx):
         D, H, W = self.crop_size
@@ -76,8 +84,10 @@ class MotorTrainDataset(Dataset):
         )
         # cls_map shape == (1, D', H', W')
 
-        # 4) 3축 flip 증강
+        # 4) 3축 flip + optional erase/noise augmentation
         patch, cls_map, off_map = random_flip3d(patch, cls_map, off_map)
+        patch = random_erase3d(patch)
+        patch = random_gaussian_noise(patch)
 
         # 5) ndarray → torch.Tensor
         #    image: (D,H,W) → [1,D,H,W]
@@ -106,14 +116,18 @@ class MotorInstanceCropDataset(Dataset):
         center_xyz: np.ndarray,
         voxel_spacing: float,
         crop_size: Tuple[int, int, int] = (96, 128, 128),
-        num_crops: int = 64,
+        num_crops: int | None = 64,
         negative_ratio: float = 0.2,
     ) -> None:
         self.vol = zarr.open(zarr_path, mode="r")
         self.centers = center_xyz.astype(np.float32) / voxel_spacing
         self.spacing = float(voxel_spacing)
         self.crop_size = crop_size
-        self.num_crops = int(num_crops)
+        if num_crops is None:
+            n_pos = len(self.centers)
+            self.num_crops = int(max(n_pos * (1 + negative_ratio), 1))
+        else:
+            self.num_crops = int(num_crops)
         self.neg_ratio = float(negative_ratio)
 
     def __len__(self) -> int:
@@ -166,6 +180,8 @@ class MotorInstanceCropDataset(Dataset):
         )
 
         patch, cls_map, off_map = random_flip3d(patch, cls_map, off_map)
+        patch = random_erase3d(patch)
+        patch = random_gaussian_noise(patch)
 
         img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
         cls_t = torch.from_numpy(cls_map.astype(np.float32))
@@ -209,6 +225,8 @@ class BackgroundRandomCropDataset(Dataset):
         off_map = np.zeros((3, D // 2, H // 2, W // 2), np.float32)
 
         patch, cls_map, off_map = random_flip3d(patch, cls_map, off_map)
+        patch = random_erase3d(patch)
+        patch = random_gaussian_noise(patch)
 
         img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
         cls_t = torch.from_numpy(cls_map)
@@ -272,6 +290,8 @@ class MotorPositiveCropDataset(Dataset):
         )
 
         patch, cls_map, off_map = random_flip3d(patch, cls_map, off_map)
+        patch = random_erase3d(patch)
+        patch = random_gaussian_noise(patch)
 
         img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
         cls_t = torch.from_numpy(cls_map.astype(np.float32))

@@ -22,12 +22,14 @@ def motor_detection_loss(
     pred: Dict[str, Tensor],
     batch: Dict[str, Tensor],
     lambda_offset: float = 1.0,
+    pos_weight: Tensor | None = None,
 ) -> Tuple[Tensor, Dict[str, float]]:
     """
     Returns
     -------
     loss  : scalar tensor
     logs  : dict(str -> float)  (for Lightning self.log_dict)
+    pos_weight : optional positive class weight for BCE
     """
     # ─── 1. 분리 ───────────────────────────────────────────────
     pred_cls:  Tensor = pred["cls"]    # (B,1,D',H',W')
@@ -38,9 +40,16 @@ def motor_detection_loss(
 
     # ─── 2. Classification BCE  ──────────────────────────────
     with torch.cuda.amp.autocast(enabled=False):        # <─ AMP off
+        if pos_weight is None:
+            pos = gt_cls.sum()
+            neg = gt_cls.numel() - pos
+            w = (neg / pos) if pos > 0 else 1.0
+            pos_weight = torch.tensor(w, device=pred_cls.device)
         bce = F.binary_cross_entropy(
             pred_cls.float(),       # 32-bit
             gt_cls.float(),
+            weight=None,
+            pos_weight=pos_weight,
             reduction="mean",
         )
 
