@@ -36,6 +36,9 @@ def parse_args():
     p.add_argument("--valid_spatial_window_size", type=int, default=128)
     p.add_argument("--transfer_weights", type=str, default=None)
     p.add_argument("--freeze_backbone_epochs", type=int, default=0)
+    p.add_argument("--pin_memory", action="store_true", help="Enable DataLoader pin_memory")
+    p.add_argument("--prefetch_factor", type=int, default=None)
+    p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
     return p.parse_args()
 
 
@@ -49,6 +52,9 @@ def main():
         batch_size=args.batch_size,
         num_workers=4,
         positive_only=args.positive_only,
+        pin_memory=args.pin_memory,
+        prefetch_factor=args.prefetch_factor,
+        use_gpu_augment=not args.cpu_augment,
         train_crop_size=(
             args.train_depth_window_size,
             args.train_spatial_window_size,

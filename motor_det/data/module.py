@@ -13,6 +13,13 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 
 class MotorDataModule(L.LightningDataModule):
+    """Builds training and validation dataloaders for BYU Motor.
+
+    If ``use_gpu_augment`` is ``True`` (default), each dataset performs
+    augmentation on CUDA tensors.  In this mode ``pin_memory`` should remain
+    ``False`` because PyTorch cannot pin already CUDA-resident tensors and will
+    raise ``RuntimeError`` when the DataLoader attempts to do so.
+    """
     def __init__(
         self,
         data_root: str,
@@ -23,6 +30,10 @@ class MotorDataModule(L.LightningDataModule):
         positive_only: bool = False,
         train_crop_size: tuple[int, int, int] = (96, 128, 128),
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
+        *,
+        pin_memory: bool = False,
+        prefetch_factor: int | None = None,
+        use_gpu_augment: bool = True,
     ):
         super().__init__()
         self.root = Path(data_root)
@@ -33,6 +44,9 @@ class MotorDataModule(L.LightningDataModule):
         self.positive_only = bool(positive_only)
         self.train_crop_size = tuple(train_crop_size)
         self.valid_crop_size = tuple(valid_crop_size)
+        self.pin_memory = bool(pin_memory)
+        self.prefetch_factor = prefetch_factor
+        self.use_gpu_augment = bool(use_gpu_augment)
 
     def setup(self, stage=None):
         # spacing map 과 train centers 데이터프레임 읽기
@@ -92,6 +106,7 @@ class MotorDataModule(L.LightningDataModule):
                     centers,
                     vx,
                     crop_size=crop_size,
+                    use_gpu=self.use_gpu_augment,
                 )
             else:
                 ds = MotorTrainDataset(
@@ -99,6 +114,7 @@ class MotorDataModule(L.LightningDataModule):
                     centers,
                     vx,
                     crop_size=crop_size,
+                    use_gpu=self.use_gpu_augment,
                 )
 
             datasets.append(ds)
@@ -113,7 +129,8 @@ class MotorDataModule(L.LightningDataModule):
             batch_size=self.bs,
             shuffle=True,
             num_workers=self.nw,
-            pin_memory=False,
+            pin_memory=self.pin_memory,
+            prefetch_factor=self.prefetch_factor,
             persistent_workers=self.persistent_workers,
             drop_last=False,
             collate_fn=collate_with_centers,
@@ -125,7 +142,8 @@ class MotorDataModule(L.LightningDataModule):
             batch_size=1,
             shuffle=False,
             num_workers=self.nw,
-            pin_memory=False,
+            pin_memory=self.pin_memory,
+            prefetch_factor=self.prefetch_factor,
             persistent_workers=self.persistent_workers,
             drop_last=False,
             collate_fn=collate_with_centers,
