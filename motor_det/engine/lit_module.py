@@ -102,7 +102,10 @@ class LitMotorDet(L.LightningModule):
             "val/fn":   fn,
         }, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
 
-        return {"f2": f2, "prec": prec, "rec": rec, "tp": tp, "fp": fp, "fn": fn}
+        # Lightning 2.x no longer uses ``validation_epoch_end``. Metrics are
+        # logged directly within ``validation_step`` above, so there is no need
+        # to return them for aggregation.
+        return None
 
     # ------------------------------------------------ #
     def configure_optimizers(self):
