@@ -75,6 +75,9 @@ class LitMotorDet(L.LightningModule):
             prob_thr=0.5, sigma=60.0, iou_thr=0.25
         )[0]
 
+        spacing = batch["spacing_Å_per_voxel"][0]
+        centers_pred = centers_pred * float(spacing)
+
         gt_centers = batch["centers_Å"][0]
         f2, prec, rec, tp, fp, fn = fbeta_score(
             centers_pred, gt_centers, beta=2, dist_thr=1000.0
