@@ -94,11 +94,32 @@ def vectorized_nms(centers: torch.Tensor, sigma: float = 60.0, iou_thr: float = 
 
 
 def decode_with_nms(
-    logits: torch.Tensor, offsets: torch.Tensor, stride: int = 2,
-    prob_thr: float = 0.5, sigma: float = 60.0, iou_thr: float = 0.25
+    logits: torch.Tensor,
+    offsets: torch.Tensor,
+    stride: int = 2,
+    prob_thr: float = 0.5,
+    sigma: float = 60.0,
+    iou_thr: float = 0.25,
+    algorithm: str = "vectorized",
+    switch_thr: int = 1000,
 ) -> List[torch.Tensor]:
-    """
-    Heatmap+Offset → NMS 후 Å 좌표 리스트
+    """Heatmap+Offset → NMS 후 Å 좌표 리스트.
+
+    Parameters
+    ----------
+    algorithm:
+        ``"vectorized"`` 또는 ``"greedy"`` 중 선택.
+    switch_thr:
+        후보 수가 이 값을 초과하면 자동으로 그리디 NMS를 사용합니다.
     """
     centers_batch = decode_detections(logits, offsets, stride, prob_thr)
-    return [vectorized_nms(c, sigma, iou_thr) for c in centers_batch]
+    results: List[torch.Tensor] = []
+    for c in centers_batch:
+        algo = algorithm
+        if algo == "vectorized" and c.size(0) > switch_thr:
+            algo = "greedy"
+        if algo == "greedy":
+            results.append(greedy_nms(c, sigma, iou_thr))
+        else:
+            results.append(vectorized_nms(c, sigma, iou_thr))
+    return results

@@ -23,6 +23,8 @@ class LitMotorDet(L.LightningModule):
         weight_decay: float = 1e-4,
         warmup_steps: int = 500,
         total_steps: int = 30_000,
+        nms_algorithm: str = "vectorized",
+        nms_switch_thr: int = 1000,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -71,8 +73,14 @@ class LitMotorDet(L.LightningModule):
         offsets = preds["offset"]
 
         centers_pred = decode_with_nms(
-            logits, offsets, stride=4,
-            prob_thr=0.5, sigma=60.0, iou_thr=0.25
+            logits,
+            offsets,
+            stride=2,
+            prob_thr=0.5,
+            sigma=60.0,
+            iou_thr=0.25,
+            algorithm=self.hparams.nms_algorithm,
+            switch_thr=self.hparams.nms_switch_thr,
         )[0]
 
         spacing = batch["spacing_Å_per_voxel"][0]
