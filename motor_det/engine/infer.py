@@ -18,6 +18,7 @@ from motor_det.utils.voxel import (
     read_test_ids,
     DEFAULT_TEST_SPACING,
 )
+from motor_det.config import InferenceConfig
 
 
 class HannWindow:
@@ -155,7 +156,7 @@ def infer_single_tomo(
     return ctr_A_xyz[None, :]                          # (1,3)
 
 
-def main(cfg):
+def infer(cfg: InferenceConfig):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.set_float32_matmul_precision("high")
 
@@ -201,6 +202,7 @@ def main(cfg):
     print("Saved →", cfg.out_csv)
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", required=True)
@@ -225,5 +227,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--early_exit", type=float, default=None)
     parser.add_argument("--flip_tta", action="store_true", help="Enable flip test-time augmentation")
+
+def main() -> None:
     args = parser.parse_args()
-    main(args)
+
+    cfg = InferenceConfig.load(args.config, env_prefix=args.env_prefix)
+    infer(cfg)
+
+
+if __name__ == "__main__":
+    main()
