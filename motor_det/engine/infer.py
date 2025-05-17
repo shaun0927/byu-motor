@@ -18,6 +18,7 @@ from motor_det.utils.voxel import (
     read_test_ids,
     DEFAULT_TEST_SPACING,
 )
+from motor_det.config import InferenceConfig
 
 
 class HannWindow:
@@ -142,7 +143,7 @@ def infer_single_tomo(
     return ctr_A_xyz[None, :]                          # (1,3)
 
 
-def main(cfg):
+def infer(cfg: InferenceConfig):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.set_float32_matmul_precision("high")
 
@@ -187,28 +188,15 @@ def main(cfg):
     print("Saved →", cfg.out_csv)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", required=True)
-    parser.add_argument("--data_root", required=True)
-    parser.add_argument("--out_csv",  required=True)
-    parser.add_argument("--win_d", type=int, default=192)
-    parser.add_argument("--win_h", type=int, default=128)
-    parser.add_argument("--win_w", type=int, default=128)
-    parser.add_argument("--stride_d", type=int, default=96)
-    parser.add_argument("--stride_h", type=int, default=64)
-    parser.add_argument("--stride_w", type=int, default=64)
-    parser.add_argument("--stride_head", type=int, default=2)
-    parser.add_argument("--batch", type=int, default=1)
-    parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--prob_thr", type=float, default=0.50)
-    parser.add_argument("--sigma", type=float, default=60.0)
-    parser.add_argument("--iou_thr", type=float, default=0.25)
-    parser.add_argument(
-        "--default_spacing",
-        type=float,
-        default=DEFAULT_TEST_SPACING,
-    )
-    parser.add_argument("--early_exit", type=float, default=None)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="BYU Motor inference")
+    parser.add_argument("--config", help="YAML/JSON configuration file")
+    parser.add_argument("--env_prefix", default="BYU_INFER_", help="Env var prefix")
     args = parser.parse_args()
-    main(args)
+
+    cfg = InferenceConfig.load(args.config, env_prefix=args.env_prefix)
+    infer(cfg)
+
+
+if __name__ == "__main__":
+    main()
