@@ -28,11 +28,12 @@ class LitMotorDet(L.LightningModule):
         self.save_hyperparameters()
 
         net = MotorDetNet()
-        if hasattr(torch, "compile"):
+        import torch as _torch  # avoid potential local shadowing issues
+        if hasattr(_torch, "compile"):
             import torch._dynamo
             torch._dynamo.config.suppress_errors = True
             try:
-                net = torch.compile(net)
+                net = _torch.compile(net)
             except Exception:
                 pass
         self.net: nn.Module = net
