@@ -65,6 +65,9 @@ class LitMotorDet(L.LightningModule):
     def training_step(self, batch, _):
         return self._shared_step(batch, "train")
 
+    def on_validation_epoch_start(self) -> None:
+        self._val_outputs: list[dict[str, torch.Tensor]] = []
+
     def validation_step(self, batch, batch_idx):
         loss = self._shared_step(batch, "val")
 
@@ -91,18 +94,29 @@ class LitMotorDet(L.LightningModule):
             centers_pred, gt_centers, beta=2, dist_thr=1000.0
         )
 
-        # 한 번에 batch-epoch 단위로 모두 기록
-        batch_size = batch["image"].size(0)
-        self.log_dict({
-            "val/f2":   f2,
-            "val/prec": prec,
-            "val/rec":  rec,
-            "val/tp":   tp,
-            "val/fp":   fp,
-            "val/fn":   fn,
-        }, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self._val_outputs.append({"tp": tp, "fp": fp, "fn": fn})
 
-        return {"f2": f2, "prec": prec, "rec": rec, "tp": tp, "fp": fp, "fn": fn}
+        return {"tp": tp, "fp": fp, "fn": fn}
+
+    def validation_epoch_end(self, outputs):
+        if not self._val_outputs:
+            return
+        device = self.device
+        tp = torch.stack([o["tp"] for o in self._val_outputs]).sum().to(device)
+        fp = torch.stack([o["fp"] for o in self._val_outputs]).sum().to(device)
+        fn = torch.stack([o["fn"] for o in self._val_outputs]).sum().to(device)
+        prec = tp / (tp + fp + 1e-9)
+        rec = tp / (tp + fn + 1e-9)
+        beta2 = 4.0
+        f2 = (1 + beta2) * prec * rec / (beta2 * prec + rec + 1e-9)
+        self.log_dict({
+            "val/f2": f2,
+            "val/prec": prec,
+            "val/rec": rec,
+            "val/tp": tp,
+            "val/fp": fp,
+            "val/fn": fn,
+        }, prog_bar=True)
 
     # ------------------------------------------------ #
     def configure_optimizers(self):
