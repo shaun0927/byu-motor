@@ -51,8 +51,6 @@ trainer = Trainer(
 )
 
 start = time.time()
-# Vectorized NMS is used by default and automatically switches to greedy
-# when more than 1,000 proposals are present.
 
 trainer.fit(LitMotorDet(nms_algorithm="vectorized", nms_switch_thr=1000), dm)
 
