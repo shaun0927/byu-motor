@@ -75,7 +75,10 @@ Run a short training cycle to gauge model quality:
 ```bash
 python -m motor_det.engine.train \
   --data_root D:\\project\\Kaggle\\BYU\\byu-motor\\data \
-  --batch_size 1 --max_steps 1500 --limit_val_batches 0.1
+  --batch_size 1 \
+  --max_steps 1500 \
+  --limit_val_batches 0.1 \
+  --val_check_interval 1500
 ```
 
 This trains for roughly 1500 iterations and evaluates on 10% of the validation
