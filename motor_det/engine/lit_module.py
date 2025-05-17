@@ -27,7 +27,13 @@ class LitMotorDet(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.net: nn.Module = MotorDetNet()
+        net = MotorDetNet()
+        if hasattr(torch, "compile"):
+            try:
+                net = torch.compile(net)
+            except Exception:
+                pass
+        self.net: nn.Module = net
 
     # ------------------------------------------------ #
     def forward(self, x: Tensor) -> Dict[str, Tensor]:
