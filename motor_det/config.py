@@ -1,3 +1,10 @@
+
+from dataclasses import dataclass
+from motor_det.utils.voxel import DEFAULT_TEST_SPACING
+
+@dataclass
+class InferConfig:
+    """Configuration defaults for inference."""
 from __future__ import annotations
 
 import ast
@@ -100,7 +107,8 @@ class InferenceConfig:
     stride_head: int = 2
     batch: int = 1
     num_workers: int = 4
-    prob_thr: float = 0.50
+
+    prob_thr: float = 0.5
     sigma: float = 60.0
     iou_thr: float = 0.25
     default_spacing: float = DEFAULT_TEST_SPACING
@@ -110,5 +118,5 @@ class InferenceConfig:
     def load(cls, path: str | Path | None = None, *, env_prefix: str | None = "BYU_INFER_") -> "InferenceConfig":
         return _load(cls, path, env_prefix)
 
-
 __all__ = ["TrainingConfig", "InferenceConfig"]
+

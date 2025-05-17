@@ -1,7 +1,9 @@
 # motor_det/engine/infer.py
 
 from __future__ import annotations
-import argparse, csv, math
+import argparse
+import csv
+import math
 from pathlib import Path
 from typing import Tuple, Sequence
 
@@ -18,7 +20,9 @@ from motor_det.utils.voxel import (
     read_test_ids,
     DEFAULT_TEST_SPACING,
 )
+
 from motor_det.config import InferenceConfig
+
 
 
 class HannWindow:
@@ -156,21 +160,34 @@ def infer_single_tomo(
     return ctr_A_xyz[None, :]                          # (1,3)
 
 
+
+def run_inference(
+    weights: Path | str,
+    data_root: Path | str,
+    out_csv: Path | str,
+    *,
+    cfg: InferConfig = InferConfig(),
+    device: torch.device | None = None,
+) -> Path:
+    """Load ``weights`` and run inference over ``data_root`` test tomograms."""
+    device = torch.device("cuda:0" if device is None else device)
+
 def infer(cfg: InferenceConfig):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     torch.set_float32_matmul_precision("high")
 
     net = MotorDetNet()
-    ckpt = torch.load(cfg.weights, map_location="cpu")
+    ckpt = torch.load(weights, map_location="cpu")
     net.load_state_dict(ckpt.get("state_dict", ckpt), strict=True)
     net.to(device)
 
-    test_ids    = read_test_ids(cfg.data_root)
-    spacing_map = voxel_spacing_map(cfg.data_root)
+    test_ids = read_test_ids(data_root)
+    spacing_map = voxel_spacing_map(data_root)
 
     rows = []
     for tid in tqdm(test_ids, desc="Tomograms"):
-        zp      = Path(cfg.data_root) / "processed" / "zarr" / "test" / f"{tid}.zarr"
+        zp = Path(data_root) / "processed" / "zarr" / "test" / f"{tid}.zarr"
         spacing = spacing_map.get(tid, cfg.default_spacing)
         ctrs    = infer_single_tomo(
             zarr_path   = zp,
@@ -187,19 +204,25 @@ def infer(cfg: InferenceConfig):
             device      = device,
             early_exit_thr = cfg.early_exit,
             flip_tta    = cfg.flip_tta,
+
         )
         if ctrs.size == 0:
             rows.append([tid, -1, -1, -1])
         else:
             rows.append([tid, *ctrs[0]])
 
-    out = Path(cfg.out_csv)
+    out = Path(out_csv)
     out.parent.mkdir(exist_ok=True, parents=True)
     with open(out, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["tomo_id", "Motor axis 0", "Motor axis 1", "Motor axis 2"])
         writer.writerows(rows)
-    print("Saved →", cfg.out_csv)
+    print("Saved →", out)
+    return out
+
+
+def main(args: argparse.Namespace) -> None:
+    run_inference(args.weights, args.data_root, args.out_csv, cfg=args)
 
 
 
@@ -208,23 +231,25 @@ if __name__ == "__main__":
     parser.add_argument("--weights", required=True)
     parser.add_argument("--data_root", required=True)
     parser.add_argument("--out_csv",  required=True)
-    parser.add_argument("--win_d", type=int, default=192)
-    parser.add_argument("--win_h", type=int, default=128)
-    parser.add_argument("--win_w", type=int, default=128)
-    parser.add_argument("--stride_d", type=int, default=96)
-    parser.add_argument("--stride_h", type=int, default=64)
-    parser.add_argument("--stride_w", type=int, default=64)
-    parser.add_argument("--stride_head", type=int, default=2)
-    parser.add_argument("--batch", type=int, default=1)
-    parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--prob_thr", type=float, default=0.50)
-    parser.add_argument("--sigma", type=float, default=60.0)
-    parser.add_argument("--iou_thr", type=float, default=0.25)
+    defaults = InferConfig()
+    parser.add_argument("--win_d", type=int, default=defaults.win_d)
+    parser.add_argument("--win_h", type=int, default=defaults.win_h)
+    parser.add_argument("--win_w", type=int, default=defaults.win_w)
+    parser.add_argument("--stride_d", type=int, default=defaults.stride_d)
+    parser.add_argument("--stride_h", type=int, default=defaults.stride_h)
+    parser.add_argument("--stride_w", type=int, default=defaults.stride_w)
+    parser.add_argument("--stride_head", type=int, default=defaults.stride_head)
+    parser.add_argument("--batch", type=int, default=defaults.batch)
+    parser.add_argument("--num_workers", type=int, default=defaults.num_workers)
+    parser.add_argument("--prob_thr", type=float, default=defaults.prob_thr)
+    parser.add_argument("--sigma", type=float, default=defaults.sigma)
+    parser.add_argument("--iou_thr", type=float, default=defaults.iou_thr)
     parser.add_argument(
         "--default_spacing",
         type=float,
-        default=DEFAULT_TEST_SPACING,
+        default=defaults.default_spacing,
     )
+
     parser.add_argument("--early_exit", type=float, default=None)
     parser.add_argument("--flip_tta", action="store_true", help="Enable flip test-time augmentation")
 
