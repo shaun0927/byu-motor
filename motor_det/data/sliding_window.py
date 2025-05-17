@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple
 
+import torch
+
 import numpy as np
 import zarr
 from torch.utils.data import Dataset
@@ -42,11 +44,15 @@ class SlidingWindowDataset(Dataset):
         stride: Tuple[int, int, int] = (96, 64, 64),
         dtype=np.float32,
     ):
-        self.store = zarr.open(zarr_path, mode="r")        # no copy ✓
-        self.win    = window                           # <─★ win 로 한 번 더 보관
+        self.store = zarr.open(zarr_path, mode="r")  # no copy ✓
+        self.win = window  # <─★ win 로 한 번 더 보관
         self.window = window
-        self.tiles = compute_tiles(self.store.shape, window, stride)
+        self.stride = stride
         self.dtype = dtype
+
+    @torch.cached_property
+    def tiles(self) -> List[Tuple[slice, slice, slice]]:
+        return compute_tiles(self.store.shape, self.window, self.stride)
 
     def __len__(self):
         return len(self.tiles)

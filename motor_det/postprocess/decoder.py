@@ -5,6 +5,7 @@ Heat-map + Offset → Å 좌표 디코더 (+ 간단 3-D NMS)
 """
 from __future__ import annotations
 import torch
+from functools import lru_cache
 from typing import List, Tuple
 
 __all__ = [
@@ -14,8 +15,8 @@ __all__ = [
 ]
 
 
-def anchors_for_offsets_feature_map(shape: Tuple[int, int, int], stride: int, device=None) -> torch.Tensor:
-    """(D,H,W) feature map → anchor 좌표(Å) tensor (3,D,H,W)"""
+@lru_cache(maxsize=None)
+def _cached_anchor_grid(shape: Tuple[int, int, int], stride: int, device: torch.device) -> torch.Tensor:
     D, H, W = shape
     z, y, x = torch.meshgrid(
         torch.arange(D, device=device),
@@ -25,6 +26,12 @@ def anchors_for_offsets_feature_map(shape: Tuple[int, int, int], stride: int, de
     )
     anchors = torch.stack([x, y, z], dim=0).float().add_(0.5).mul_(stride)
     return anchors
+
+
+def anchors_for_offsets_feature_map(shape: Tuple[int, int, int], stride: int, device=None) -> torch.Tensor:
+    """(D,H,W) feature map → anchor 좌표(Å) tensor (3,D,H,W)"""
+    device = torch.device("cpu") if device is None else torch.device(device)
+    return _cached_anchor_grid(tuple(shape), stride, device)
 
 
 def decode_detections(
