@@ -3,7 +3,10 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader, ConcatDataset
 from pathlib import Path
-from motor_det.data.dataset import MotorTrainDataset
+from motor_det.data.dataset import (
+    MotorTrainDataset,
+    PositiveOnlyCropDataset,
+)
 from motor_det.utils.collate import collate_with_centers
 from motor_det.utils.voxel import voxel_spacing_map, read_train_centers
 from sklearn.model_selection import StratifiedGroupKFold
@@ -17,6 +20,7 @@ class MotorDataModule(L.LightningDataModule):
         batch_size: int = 2,
         num_workers: int = 4,
         persistent_workers: bool = False,
+        positive_only: bool = False,
     ):
         super().__init__()
         self.root = Path(data_root)
@@ -24,6 +28,7 @@ class MotorDataModule(L.LightningDataModule):
         self.bs = batch_size
         self.nw = num_workers
         self.persistent_workers = persistent_workers
+        self.positive_only = bool(positive_only)
 
     def setup(self, stage=None):
         # spacing map 과 train centers 데이터프레임 읽기
@@ -69,14 +74,19 @@ class MotorDataModule(L.LightningDataModule):
             # `Motor axis 0` 이 음수이면 해당 tomogram 에 motor 가 없음
             sub_df = sub_df[sub_df["Motor axis 0"] >= 0]
 
-            if len(sub_df) == 0:
+            centers = sub_df[["Motor axis 2", "Motor axis 1", "Motor axis 0"]].values.astype(np.float32)
+            vx = spacing_map.get(tid, 15.0)
+
+            if self.positive_only and len(centers) == 0:
                 # skip tomograms without GT when using positive-only crops
                 continue
-            
-            centers = sub_df[["Motor axis 2", "Motor axis 1", "Motor axis 0"]]
-            centers = centers.values.astype(np.float32)
-            vx = spacing_map.get(tid, 15.0)
-            datasets.append(MotorTrainDataset(zarr_path, centers, vx))
+
+            if self.positive_only:
+                ds = PositiveOnlyCropDataset(zarr_path, centers, vx)
+            else:
+                ds = MotorTrainDataset(zarr_path, centers, vx)
+
+            datasets.append(ds)
 
         if len(datasets) == 0:
             raise ValueError(f"Fold {self.fold}에 사용 가능한 Zarr 데이터가 없습니다: ids={ids}")

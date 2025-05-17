@@ -22,5 +22,6 @@ pip install -e .
 Run the training script:
 
 ```bash
-python -m motor_det.engine.train --data_root data --batch_size 2 --epochs 10 --lr 3e-4
+python -m motor_det.engine.train --data_root data --batch_size 2 --epochs 10 \
+    --lr 3e-4 [--positive_only]
 ```
