@@ -81,6 +81,7 @@ class LitMotorDet(L.LightningModule):
         )
 
         # 한 번에 batch-epoch 단위로 모두 기록
+        batch_size = batch["image"].size(0)
         self.log_dict({
             "val/f2":   f2,
             "val/prec": prec,
@@ -88,7 +89,7 @@ class LitMotorDet(L.LightningModule):
             "val/tp":   tp,
             "val/fp":   fp,
             "val/fn":   fn,
-        }, on_step=False, on_epoch=True, prog_bar=True)
+        }, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
 
         return {"f2": f2, "prec": prec, "rec": rec, "tp": tp, "fp": fp, "fn": fn}
 
