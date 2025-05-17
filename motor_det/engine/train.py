@@ -24,6 +24,7 @@ from motor_det.config import TrainingConfig
 
 def parse_args():
     p = argparse.ArgumentParser()
+    p.add_argument("--config", type=str, default=None, help="Training config file")
     p.add_argument("--data_root", type=str, required=True)
     p.add_argument("--batch_size", type=int, default=2)
     p.add_argument("--epochs", type=int, default=10)
