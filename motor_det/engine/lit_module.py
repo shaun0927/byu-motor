@@ -29,13 +29,21 @@ class LitMotorDet(L.LightningModule):
 
         net = MotorDetNet()
         import torch as _torch  # avoid potential local shadowing issues
-        if hasattr(_torch, "compile"):
-            import torch._dynamo
-            torch._dynamo.config.suppress_errors = True
+        import warnings
+
+        if _torch.cuda.is_available() and hasattr(_torch, "compile"):
             try:
-                net = _torch.compile(net)
+                import triton  # noqa: F401
             except Exception:
-                pass
+                warnings.warn("Triton not found; skipping torch.compile", stacklevel=2)
+            else:
+                import torch._dynamo
+                torch._dynamo.config.suppress_errors = True
+                try:
+                    net = _torch.compile(net)
+                except Exception:
+                    warnings.warn("torch.compile failed; continuing without compilation", stacklevel=2)
+
         self.net: nn.Module = net
 
     # ------------------------------------------------ #
