@@ -29,6 +29,8 @@ class LitMotorDet(L.LightningModule):
 
         net = MotorDetNet()
         if hasattr(torch, "compile"):
+            import torch._dynamo
+            torch._dynamo.config.suppress_errors = True
             try:
                 net = torch.compile(net)
             except Exception:
