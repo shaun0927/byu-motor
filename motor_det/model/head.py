@@ -5,8 +5,8 @@ from torch import nn
 class PointHead(nn.Module):
     """
     Anchor-free centre-+offset head (stride 2).
-    - cls   : 1 채널 Sigmoid
-    - offset: 3 채널 Tanh * 2
+    - cls   : 1 channel logits
+    - offset: 3 channel Tanh * 2
     """
     def __init__(self, in_channels: int = 64, stride: int = 2):
         super().__init__()
@@ -29,6 +29,6 @@ class PointHead(nn.Module):
         nn.init.constant_(self.off_head.bias, 0.0)
 
     def forward(self, x: torch.Tensor):
-        cls  = torch.sigmoid(self.cls_head(self.cls_stem(x)))
+        cls  = self.cls_head(self.cls_stem(x))
         offs = torch.tanh(self.off_head(self.off_stem(x))) * self.stride
         return cls, offs
