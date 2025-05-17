@@ -30,3 +30,28 @@ Enabling `--pin_memory` is useful when using CPU-based augmentation. When
 CUDA augmentation is active (the default), set `--cpu_augment` before enabling
 `--pin_memory` to avoid ``RuntimeError: cannot pin 'cuda' memory`` from the
 DataLoader.
+
+## Inference
+
+Use the convenience function `run_inference` to load a checkpoint and
+predict motor centers for a directory of tomograms.
+
+```python
+from motor_det.engine.infer import run_inference, InferConfig
+
+run_inference(
+    "weights/best.ckpt",
+    data_root="data",
+    out_csv="preds.csv",
+    cfg=InferConfig(),  # optional configuration overrides
+)
+```
+
+Alternatively the same defaults are available via the CLI:
+
+```bash
+python -m motor_det.engine.infer \
+    --weights weights/best.ckpt \
+    --data_root data \
+    --out_csv preds.csv
+```
