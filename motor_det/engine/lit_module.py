@@ -112,6 +112,10 @@ class LitMotorDet(L.LightningModule):
         self.log_dict({
             "val/f2": f2,
             "val/prec": prec,
+        # Lightning 2.x no longer uses ``validation_epoch_end``. Metrics are
+        # logged directly within ``validation_step`` above, so there is no need
+        # to return them for aggregation.
+        return None
             "val/rec": rec,
             "val/tp": tp,
             "val/fp": fp,
