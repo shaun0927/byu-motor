@@ -70,7 +70,7 @@ class TrainingConfig:
     pin_memory: bool = False
     prefetch_factor: int | None = None
     use_gpu_augment: bool = True
-    valid_use_gpu_augment: bool | None = None
+    valid_use_gpu_augment: bool | None = False
     mixup_prob: float = 0.0
     cutmix_prob: float = 0.0
     epochs: int = 10
