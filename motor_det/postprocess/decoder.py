@@ -7,7 +7,11 @@ from __future__ import annotations
 import torch
 from typing import List, Tuple
 
-__all__ = ["decode_detections", "decode_with_nms"]
+__all__ = [
+    "decode_detections",
+    "decode_with_nms",
+    "vectorized_nms",
+]
 
 
 def anchors_for_offsets_feature_map(shape: Tuple[int, int, int], stride: int, device=None) -> torch.Tensor:
@@ -66,6 +70,22 @@ def greedy_nms(centers: torch.Tensor, sigma: float = 60.0, iou_thr: float = 0.25
     return centers[torch.tensor(keep, device=centers.device)]
 
 
+def vectorized_nms(centers: torch.Tensor, sigma: float = 60.0, iou_thr: float = 0.25) -> torch.Tensor:
+    """Vectorised NMS to speed up inference."""
+    if centers.size(0) == 0:
+        return centers
+    order = torch.arange(centers.size(0), device=centers.device)
+    keep = torch.ones_like(order, dtype=torch.bool)
+    d2 = ((centers.unsqueeze(0) - centers.unsqueeze(1)) ** 2).sum(dim=-1)
+    iou = torch.exp(-d2 / (2 * sigma * sigma))
+    for i in order:
+        if not keep[i]:
+            continue
+        keep &= iou[i] <= iou_thr
+        keep[i] = True
+    return centers[keep]
+
+
 def decode_with_nms(
     logits: torch.Tensor, offsets: torch.Tensor, stride: int = 2,
     prob_thr: float = 0.5, sigma: float = 60.0, iou_thr: float = 0.25
@@ -74,4 +94,4 @@ def decode_with_nms(
     Heatmap+Offset → NMS 후 Å 좌표 리스트
     """
     centers_batch = decode_detections(logits, offsets, stride, prob_thr)
-    return [greedy_nms(c, sigma, iou_thr) for c in centers_batch]
+    return [vectorized_nms(c, sigma, iou_thr) for c in centers_batch]

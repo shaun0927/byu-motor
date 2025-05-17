@@ -39,6 +39,7 @@ def infer_single_tomo(
     sigma_Å: float,
     iou_thr: float,
     device: torch.device,
+    early_exit_thr: float | None = None,
 ) -> np.ndarray:
     """
     하나의 톰ogram을 sliding-window + Hann 가중치 + NMS로 추론하여
@@ -63,6 +64,7 @@ def infer_single_tomo(
 
     # ─── sliding-window 루프 ───────────────────────────────
     with amp_ctx():
+        stop = False
         for patches, origins in tqdm(loader, desc=zarr_path.stem, leave=False):
             # patches: (B,1,D_win,H_win,W_win)
             # origins: tuple of 3 tensors (oz_batch, oy_batch, ox_batch), each shape (B,)
@@ -90,6 +92,12 @@ def infer_single_tomo(
                 acc_prob [slz, sly, slx]   += prob_b * hann_bds
                 acc_offs[:, slz, sly, slx] += offs_b * hann_bds
                 acc_w   [slz, sly, slx]    += hann_bds
+
+            if early_exit_thr is not None and acc_prob.max() >= early_exit_thr:
+                stop = True
+                break
+        if stop:
+            break
 
     # 6) 전체 가중합 → 평균 (종전 그대로)
     mask = acc_w > 0
@@ -143,6 +151,7 @@ def main(cfg):
             sigma_Å     = cfg.sigma,
             iou_thr     = cfg.iou_thr,
             device      = device,
+            early_exit_thr = cfg.early_exit,
         )
         if ctrs.size == 0:
             rows.append([tid, -1, -1, -1])
@@ -176,5 +185,6 @@ if __name__ == "__main__":
     parser.add_argument("--sigma", type=float, default=60.0)
     parser.add_argument("--iou_thr", type=float, default=0.25)
     parser.add_argument("--default_spacing", type=float, default=15.0)
+    parser.add_argument("--early_exit", type=float, default=None)
     args = parser.parse_args()
     main(args)

@@ -1,5 +1,6 @@
 # motor_det/utils/augment.py
 import numpy as np
+import torch
 
 
 def random_flip3d(volume: np.ndarray, cls_map: np.ndarray, off_map: np.ndarray):
@@ -97,4 +98,39 @@ def random_gaussian_noise(volume: np.ndarray, std: float = 5.0) -> np.ndarray:
         noise = np.random.normal(0.0, std, size=volume.shape)
         volume = volume.astype(np.float32) + noise
         volume = np.clip(volume, 0, 255).astype(np.uint8)
+    return volume
+
+
+def random_flip3d_torch(
+    volume: torch.Tensor, cls_map: torch.Tensor, off_map: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Torch version of :func:`random_flip3d` operating on CUDA tensors."""
+    for ax in (0, 1, 2):
+        if torch.rand(1, device=volume.device) < 0.5:
+            volume = torch.flip(volume, dims=(ax,))
+            cls_map = torch.flip(cls_map, dims=(ax + 1,))
+            off_map = torch.flip(off_map, dims=(ax + 1,))
+            off_map[ax].neg_()
+    return volume.contiguous(), cls_map.contiguous(), off_map.contiguous()
+
+
+def random_erase3d_torch(volume: torch.Tensor, max_ratio: float = 0.3) -> torch.Tensor:
+    if torch.rand(1, device=volume.device) < 0.5:
+        D, H, W = volume.shape
+        ratio = float(torch.empty(1).uniform_(0.1, max_ratio))
+        dz = max(1, int(D * ratio))
+        dy = max(1, int(H * ratio))
+        dx = max(1, int(W * ratio))
+        z0 = int(torch.randint(0, max(1, D - dz + 1), (1,)))
+        y0 = int(torch.randint(0, max(1, H - dy + 1), (1,)))
+        x0 = int(torch.randint(0, max(1, W - dx + 1), (1,)))
+        volume[z0 : z0 + dz, y0 : y0 + dy, x0 : x0 + dx] = 0
+    return volume
+
+
+def random_gaussian_noise_torch(volume: torch.Tensor, std: float = 5.0) -> torch.Tensor:
+    if torch.rand(1, device=volume.device) < 0.5:
+        noise = torch.normal(0.0, std, size=volume.shape, device=volume.device)
+        volume = volume.float() + noise
+        volume.clamp_(0, 255)
     return volume
