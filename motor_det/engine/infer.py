@@ -16,6 +16,22 @@ from motor_det.postprocess.decoder import decode_with_nms
 from motor_det.utils.voxel import voxel_spacing_map, read_test_ids
 
 
+class HannWindow:
+    """Cached cosine Hann window and its downsampled version."""
+
+    def __init__(self, window: Tuple[int, int, int], stride: int) -> None:
+        self.window = window
+        self.stride = stride
+
+    @torch.cached_property
+    def full(self) -> np.ndarray:
+        return cosine_hann_3d(self.window)
+
+    @torch.cached_property
+    def downsampled(self) -> np.ndarray:
+        return self.full[::self.stride, ::self.stride, ::self.stride]
+
+
 def cosine_hann_3d(shape: Sequence[int]) -> np.ndarray:
     """Return 3-D separable cosine (Hann) window, float32, shape (D,H,W)."""
     def hann(L: int) -> np.ndarray:
@@ -56,8 +72,8 @@ def infer_single_tomo(
     acc_w    = np.zeros((D_o, H_o, W_o), np.float32)
 
     # ─── Hann 윈도우 한 번만 다운샘플 ───────────────────────
-    hann_full = cosine_hann_3d(window)  # (D_win,H_win,W_win)
-    hann_ds   = hann_full[::stride_head, ::stride_head, ::stride_head]  # (D',H',W')
+    hann = HannWindow(window, stride_head)
+    hann_ds = hann.downsampled  # (D',H',W')
 
     net.eval()
     amp_ctx = torch.cuda.amp.autocast if device.type == "cuda" else torch.cpu.amp.autocast
@@ -96,8 +112,6 @@ def infer_single_tomo(
             if early_exit_thr is not None and acc_prob.max() >= early_exit_thr:
                 stop = True
                 break
-        if stop:
-            break
 
     # 6) 전체 가중합 → 평균 (종전 그대로)
     mask = acc_w > 0
