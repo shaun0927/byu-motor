@@ -28,6 +28,8 @@ def parse_args():
     p.add_argument("--data_root", type=str, required=True)
     p.add_argument("--batch_size", type=int, default=2)
     p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--num_workers", type=int, default=4, help="Number of DataLoader workers")
+    p.add_argument("--persistent_workers", action="store_true", help="Keep DataLoader workers alive between epochs")
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)
     p.add_argument("--fold", type=int, default=0)
@@ -46,6 +48,12 @@ def parse_args():
     p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
     p.add_argument("--max_steps", type=int, default=None, help="Maximum training steps")
     p.add_argument("--limit_val_batches", type=float, default=1.0, help="Fraction of validation batches to run")
+    p.add_argument(
+        "--val_check_interval",
+        type=float,
+        default=1.0,
+        help="Interval (in steps or fraction of an epoch) between validation runs",
+    )
     p.add_argument(
         "--env_prefix",
         type=str,
@@ -104,6 +112,7 @@ def train(cfg: TrainingConfig):
         precision="16-mixed",          # 사용할 AMP 정밀도
         log_every_n_steps=50,
         default_root_dir=Path("runs") / f"motor_fold{cfg.fold}",
+        val_check_interval=cfg.val_check_interval,
         limit_val_batches=cfg.limit_val_batches,
         callbacks=callbacks,
     )
@@ -121,6 +130,8 @@ def main() -> None:
     cfg.data_root = args.data_root
     cfg.batch_size = args.batch_size
     cfg.epochs = args.epochs
+    cfg.num_workers = args.num_workers
+    cfg.persistent_workers = args.persistent_workers
     cfg.lr = args.lr
     cfg.weight_decay = args.weight_decay
     cfg.fold = args.fold
@@ -145,6 +156,7 @@ def main() -> None:
     cfg.cutmix_prob = args.cutmix
     cfg.max_steps = args.max_steps
     cfg.limit_val_batches = args.limit_val_batches
+    cfg.val_check_interval = args.val_check_interval
 
     train(cfg)
 
