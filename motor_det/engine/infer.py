@@ -13,7 +13,11 @@ from tqdm import tqdm
 from motor_det.data.sliding_window import SlidingWindowDataset
 from motor_det.model.net import MotorDetNet
 from motor_det.postprocess.decoder import decode_with_nms
-from motor_det.utils.voxel import voxel_spacing_map, read_test_ids
+from motor_det.utils.voxel import (
+    voxel_spacing_map,
+    read_test_ids,
+    DEFAULT_TEST_SPACING,
+)
 
 
 class HannWindow:
@@ -200,7 +204,11 @@ if __name__ == "__main__":
     parser.add_argument("--prob_thr", type=float, default=0.50)
     parser.add_argument("--sigma", type=float, default=60.0)
     parser.add_argument("--iou_thr", type=float, default=0.25)
-    parser.add_argument("--default_spacing", type=float, default=15.0)
+    parser.add_argument(
+        "--default_spacing",
+        type=float,
+        default=DEFAULT_TEST_SPACING,
+    )
     parser.add_argument("--early_exit", type=float, default=None)
     args = parser.parse_args()
     main(args)

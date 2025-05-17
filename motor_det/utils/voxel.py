@@ -19,8 +19,11 @@ DEFAULT_TEST_SPACING = 15.0
 @lru_cache(maxsize=1)
 def voxel_spacing_map(root: str | Path) -> Dict[str, float]:
     """
-    Returns dict[tomo_id -> voxel_spacing(Å)] for BYU train set.
-    Test tomograms( spacing 미공개 )는 기본값 15 Å 로 채움.
+    Returns ``dict[tomo_id -> voxel_spacing(Å)]`` for BYU train set.
+
+    Test tomograms have no official spacing information.  Those IDs are
+    filled with :data:`DEFAULT_TEST_SPACING` when present in the processed
+    test directory.
     """
     root = Path(root)
     csv_path = root / "raw" / "train_labels.csv"
@@ -31,7 +34,13 @@ def voxel_spacing_map(root: str | Path) -> Dict[str, float]:
     if "Voxel spacing" not in df.columns:
         raise ValueError("'Voxel spacing' column not found in train_labels.csv")
 
-    return dict(zip(df["tomo_id"].astype(str), df["Voxel spacing"].astype(float)))
+    spacing = dict(zip(df["tomo_id"].astype(str), df["Voxel spacing"].astype(float)))
+
+    # Add test IDs with default spacing if available
+    for tid in read_test_ids(root):
+        spacing.setdefault(tid, DEFAULT_TEST_SPACING)
+
+    return spacing
 
 
 # ----------------------------- train centres ---------------------------------

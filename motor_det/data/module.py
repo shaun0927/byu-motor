@@ -8,7 +8,11 @@ from motor_det.data.dataset import (
     PositiveOnlyCropDataset,
 )
 from motor_det.utils.collate import collate_with_centers
-from motor_det.utils.voxel import voxel_spacing_map, read_train_centers
+from motor_det.utils.voxel import (
+    voxel_spacing_map,
+    read_train_centers,
+    DEFAULT_TEST_SPACING,
+)
 from sklearn.model_selection import StratifiedGroupKFold
 
 
@@ -94,7 +98,7 @@ class MotorDataModule(L.LightningDataModule):
             sub_df = sub_df[sub_df["Motor axis 0"] >= 0]
 
             centers = sub_df[["Motor axis 2", "Motor axis 1", "Motor axis 0"]].values.astype(np.float32)
-            vx = spacing_map.get(tid, 15.0)
+            vx = spacing_map.get(tid, DEFAULT_TEST_SPACING)
 
             if self.positive_only and len(centers) == 0:
                 # skip tomograms without GT when using positive-only crops
