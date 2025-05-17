@@ -73,6 +73,7 @@ python -m motor_det.engine.train \
   --limit_val_batches 0.1 \
   --val_check_interval 1500 \
   --persistent_workers
+
 ```
 
 위 예시는 약 1500 스텝 동안 학습하며 검증 세트의 10%만 사용해 성능을 빠르게 확인합니다.
