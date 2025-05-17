@@ -91,3 +91,93 @@ class MotorTrainDataset(Dataset):
             "offset":    off_t,      # [3,D',H',W']
             "centers_Å": centers_A,  # [K,3]
         }
+
+
+class MotorInstanceCropDataset(MotorTrainDataset):
+    """Crop patches centered on each GT instance."""
+
+    def __init__(
+        self,
+        zarr_path: Path,
+        center_xyz: np.ndarray,
+        voxel_spacing: float,
+        crop_size: Tuple[int, int, int] = (96, 128, 128),
+        num_crops: int = 1,
+    ):
+        super().__init__(
+            zarr_path,
+            center_xyz,
+            voxel_spacing,
+            crop_size=crop_size,
+            negative_ratio=0.0,
+        )
+        self.num_crops = int(num_crops)
+
+    def __len__(self):
+        return len(self.centers) * self.num_crops
+
+    def __getitem__(self, idx):
+        D, H, W = self.crop_size
+        Z, Y, X = self.vol.shape
+        ctr = self.centers[idx // self.num_crops]
+        jitter = np.random.randint(-np.array(self.crop_size) // 4,
+                                   np.array(self.crop_size) // 4 + 1)
+        z0 = int(np.clip(ctr[2] - D // 2 + jitter[0], 0, Z - D))
+        y0 = int(np.clip(ctr[1] - H // 2 + jitter[1], 0, Y - H))
+        x0 = int(np.clip(ctr[0] - W // 2 + jitter[2], 0, X - W))
+        z1, y1, x1 = z0 + D, y0 + H, x0 + W
+
+        patch = np.asarray(self.vol[z0:z1, y0:y1, x0:x1], dtype=np.uint8)
+
+        mask = (
+            (self.centers[:, 2] >= z0)
+            & (self.centers[:, 2] < z1)
+            & (self.centers[:, 1] >= y0)
+            & (self.centers[:, 1] < y1)
+            & (self.centers[:, 0] >= x0)
+            & (self.centers[:, 0] < x1)
+        )
+        centers_local = self.centers[mask] - np.array([x0, y0, z0], dtype=np.float32)
+        cls_map, off_map = build_target_maps(
+            centers_local,
+            crop_size=self.crop_size,
+            stride=2,
+        )
+
+        patch, cls_map, off_map = random_flip3d(patch, cls_map, off_map)
+
+        img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
+        cls_t = torch.from_numpy(cls_map.astype(np.float32))
+        off_t = torch.from_numpy(off_map.astype(np.float32))
+        centers_A = torch.from_numpy((centers_local * self.spacing).astype(np.float32))
+
+        return {
+            "image": img_t,
+            "cls": cls_t,
+            "offset": off_t,
+            "centers_Å": centers_A,
+        }
+
+
+class BackgroundRandomCropDataset(MotorTrainDataset):
+    """Dataset of random background patches without positive instances."""
+
+    def __init__(
+        self,
+        zarr_path: Path,
+        center_xyz: np.ndarray,
+        voxel_spacing: float,
+        crop_size: Tuple[int, int, int] = (96, 128, 128),
+        num_crops: int = 64,
+    ):
+        super().__init__(
+            zarr_path,
+            center_xyz,
+            voxel_spacing,
+            crop_size=crop_size,
+            negative_ratio=1.0,
+        )
+        self.num_crops = int(num_crops)
+
+    def __len__(self):
+        return self.num_crops

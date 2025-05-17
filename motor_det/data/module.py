@@ -3,7 +3,11 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader, ConcatDataset
 from pathlib import Path
-from motor_det.data.dataset import MotorTrainDataset
+from motor_det.data.dataset import (
+    MotorTrainDataset,
+    MotorInstanceCropDataset,
+    BackgroundRandomCropDataset,
+)
 from motor_det.utils.voxel import voxel_spacing_map, read_train_centers
 from sklearn.model_selection import StratifiedGroupKFold
 
@@ -16,6 +20,10 @@ class MotorDataModule(L.LightningDataModule):
         batch_size: int = 2,
         num_workers: int = 4,
         persistent_workers: bool = False,
+        *,
+        use_instance_crop: bool = False,
+        neg_ratio: float = 0.5,
+        num_crops: int = 1,
     ):
         super().__init__()
         self.root = Path(data_root)
@@ -23,6 +31,9 @@ class MotorDataModule(L.LightningDataModule):
         self.bs = batch_size
         self.nw = num_workers
         self.persistent_workers = persistent_workers
+        self.use_instance_crop = use_instance_crop
+        self.neg_ratio = neg_ratio
+        self.num_crops = num_crops
 
     def setup(self, stage=None):
         # spacing map 과 train centers 데이터프레임 읽기
@@ -70,7 +81,31 @@ class MotorDataModule(L.LightningDataModule):
             centers = sub_df[["Motor axis 2", "Motor axis 1", "Motor axis 0"]]
             centers = centers.values.astype(np.float32)
             vx = spacing_map.get(tid, 15.0)
-            datasets.append(MotorTrainDataset(zarr_path, centers, vx))
+            if self.use_instance_crop and training:
+                pos_ds = MotorInstanceCropDataset(
+                    zarr_path,
+                    centers,
+                    vx,
+                    num_crops=self.num_crops,
+                )
+                if self.neg_ratio > 0:
+                    neg_count = max(1, int(len(centers) * self.num_crops * self.neg_ratio))
+                    neg_ds = BackgroundRandomCropDataset(
+                        zarr_path,
+                        centers,
+                        vx,
+                        num_crops=neg_count,
+                    )
+                    datasets.append(ConcatDataset([pos_ds, neg_ds]))
+                else:
+                    datasets.append(pos_ds)
+            else:
+                datasets.append(MotorTrainDataset(
+                    zarr_path,
+                    centers,
+                    vx,
+                    negative_ratio=self.neg_ratio,
+                ))
 
         if len(datasets) == 0:
             raise ValueError(f"Fold {self.fold}에 사용 가능한 Zarr 데이터가 없습니다: ids={ids}")
