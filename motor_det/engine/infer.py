@@ -20,7 +20,9 @@ from motor_det.utils.voxel import (
     read_test_ids,
     DEFAULT_TEST_SPACING,
 )
-from motor_det.config import InferConfig
+
+from motor_det.config import InferenceConfig
+
 
 
 class HannWindow:
@@ -63,6 +65,7 @@ def infer_single_tomo(
     iou_thr: float,
     device: torch.device,
     early_exit_thr: float | None = None,
+    flip_tta: bool = False,
 ) -> np.ndarray:
     """
     하나의 톰ogram을 sliding-window + Hann 가중치 + NMS로 추론하여
@@ -87,35 +90,47 @@ def infer_single_tomo(
     amp_ctx = torch.cuda.amp.autocast if device.type == "cuda" else torch.cpu.amp.autocast
 
     # ─── sliding-window 루프 ───────────────────────────────
+    orientations = [()]
+    if flip_tta:
+        orientations += [(0,), (1,), (2,)]
+
     with amp_ctx():
         stop = False
         for patches, origins in tqdm(loader, desc=zarr_path.stem, leave=False):
-            # patches: (B,1,D_win,H_win,W_win)
-            # origins: tuple of 3 tensors (oz_batch, oy_batch, ox_batch), each shape (B,)
             patches = patches.to(device, non_blocking=True) / 255.0
-            out     = net(patches)
-            logits  = out["cls"]     # (B,1,D',H',W')
-            offsets = out["offset"]  # (B,3,D',H',W')
+            for axes in orientations:
+                p = patches
+                if axes:
+                    dims = [ax + 2 for ax in axes]
+                    p = torch.flip(p, dims=dims)
+                out = net(p)
+                logits = out["cls"]
+                offsets = out["offset"]
+                if axes:
+                    logits = torch.flip(logits, dims=dims)
+                    offsets = torch.flip(offsets, dims=dims)
+                    for ax in axes:
+                        offsets[:, ax].neg_()
 
-            prob_np = torch.sigmoid(logits).cpu().numpy()[:, 0, ...]  # (B,D',H',W')
-            offs_np = offsets.cpu().numpy()                          # (B,3,D',H',W')
+                prob_np = torch.sigmoid(logits).cpu().numpy()[:, 0, ...]
+                offs_np = offsets.cpu().numpy()
 
-            B = prob_np.shape[0]
-            for b in range(B):
-                oz, oy, ox = (origins[k][b].item() // stride_head for k in range(3))
-                dz, dy, dx = prob_np[b].shape
+                B = prob_np.shape[0]
+                for b in range(B):
+                    oz, oy, ox = (origins[k][b].item() // stride_head for k in range(3))
+                    dz, dy, dx = prob_np[b].shape
 
-                prob_b   = prob_np[b, :dz, :dy, :dx]          # (dz,dy,dx)
-                offs_b   = offs_np[b, :, :dz, :dy, :dx]       # (3,dz,dy,dx)
-                hann_bds = hann_ds[:dz, :dy, :dx]             # (dz,dy,dx)
+                    prob_b   = prob_np[b, :dz, :dy, :dx]
+                    offs_b   = offs_np[b, :, :dz, :dy, :dx]
+                    hann_bds = hann_ds[:dz, :dy, :dx]
 
-                slz = slice(oz, oz + dz)
-                sly = slice(oy, oy + dy)
-                slx = slice(ox, ox + dx)
+                    slz = slice(oz, oz + dz)
+                    sly = slice(oy, oy + dy)
+                    slx = slice(ox, ox + dx)
 
-                acc_prob [slz, sly, slx]   += prob_b * hann_bds
-                acc_offs[:, slz, sly, slx] += offs_b * hann_bds
-                acc_w   [slz, sly, slx]    += hann_bds
+                    acc_prob [slz, sly, slx]   += prob_b * hann_bds
+                    acc_offs[:, slz, sly, slx] += offs_b * hann_bds
+                    acc_w   [slz, sly, slx]    += hann_bds
 
             if early_exit_thr is not None and acc_prob.max() >= early_exit_thr:
                 stop = True
@@ -145,6 +160,7 @@ def infer_single_tomo(
     return ctr_A_xyz[None, :]                          # (1,3)
 
 
+
 def run_inference(
     weights: Path | str,
     data_root: Path | str,
@@ -155,6 +171,10 @@ def run_inference(
 ) -> Path:
     """Load ``weights`` and run inference over ``data_root`` test tomograms."""
     device = torch.device("cuda:0" if device is None else device)
+
+def infer(cfg: InferenceConfig):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     torch.set_float32_matmul_precision("high")
 
     net = MotorDetNet()
@@ -169,20 +189,22 @@ def run_inference(
     for tid in tqdm(test_ids, desc="Tomograms"):
         zp = Path(data_root) / "processed" / "zarr" / "test" / f"{tid}.zarr"
         spacing = spacing_map.get(tid, cfg.default_spacing)
-        ctrs = infer_single_tomo(
-            zarr_path=zp,
-            net=net,
-            window=(cfg.win_d, cfg.win_h, cfg.win_w),
-            stride=(cfg.stride_d, cfg.stride_h, cfg.stride_w),
-            stride_head=cfg.stride_head,
-            spacing_Å=spacing,
-            batch_size=cfg.batch,
-            num_workers=cfg.num_workers,
-            prob_thr=cfg.prob_thr,
-            sigma_Å=cfg.sigma,
-            iou_thr=cfg.iou_thr,
-            device=device,
-            early_exit_thr=cfg.early_exit,
+        ctrs    = infer_single_tomo(
+            zarr_path   = zp,
+            net         = net,
+            window      = (cfg.win_d, cfg.win_h, cfg.win_w),
+            stride      = (cfg.stride_d, cfg.stride_h, cfg.stride_w),
+            stride_head = cfg.stride_head,
+            spacing_Å   = spacing,
+            batch_size  = cfg.batch,
+            num_workers = cfg.num_workers,
+            prob_thr    = cfg.prob_thr,
+            sigma_Å     = cfg.sigma,
+            iou_thr     = cfg.iou_thr,
+            device      = device,
+            early_exit_thr = cfg.early_exit,
+            flip_tta    = cfg.flip_tta,
+
         )
         if ctrs.size == 0:
             rows.append([tid, -1, -1, -1])
@@ -201,6 +223,7 @@ def run_inference(
 
 def main(args: argparse.Namespace) -> None:
     run_inference(args.weights, args.data_root, args.out_csv, cfg=args)
+
 
 
 if __name__ == "__main__":
@@ -226,6 +249,16 @@ if __name__ == "__main__":
         type=float,
         default=defaults.default_spacing,
     )
-    parser.add_argument("--early_exit", type=float, default=defaults.early_exit)
+
+    parser.add_argument("--early_exit", type=float, default=None)
+    parser.add_argument("--flip_tta", action="store_true", help="Enable flip test-time augmentation")
+
+def main() -> None:
     args = parser.parse_args()
-    main(args)
+
+    cfg = InferenceConfig.load(args.config, env_prefix=args.env_prefix)
+    infer(cfg)
+
+
+if __name__ == "__main__":
+    main()

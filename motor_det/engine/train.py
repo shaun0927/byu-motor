@@ -9,6 +9,7 @@ Example:
         --lr 3e-4
 """
 from __future__ import annotations
+
 import argparse
 from pathlib import Path
 
@@ -18,6 +19,7 @@ import torch
 from motor_det.data.module import MotorDataModule
 from motor_det.engine.lit_module import LitMotorDet
 from motor_det.callbacks.freeze_backbone import FreezeBackbone
+from motor_det.config import TrainingConfig
 
 
 def parse_args():
@@ -39,78 +41,72 @@ def parse_args():
     p.add_argument("--pin_memory", action="store_true", help="Enable DataLoader pin_memory")
     p.add_argument("--prefetch_factor", type=int, default=None)
     p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
+    p.add_argument("--mixup", type=float, default=0.0, help="MixUp probability")
+    p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
     p.add_argument(
-        "--nms_algorithm",
+        "--env_prefix",
         type=str,
-        choices=["vectorized", "greedy"],
-        default="vectorized",
-        help="NMS algorithm to use during validation",
-    )
-    p.add_argument(
-        "--nms_switch_thr",
-        type=int,
-        default=1000,
-        help="Switch to greedy NMS when detections exceed this number",
+        default="BYU_TRAIN_",
+        help="Prefix for environment variable overrides",
     )
     return p.parse_args()
 
 
-def main():
-    args = parse_args()
+def train(cfg: TrainingConfig):
 
     # -------- Data --------
     dm = MotorDataModule(
-        data_root=args.data_root,
-        fold=args.fold,
-        batch_size=args.batch_size,
-        num_workers=4,
-        positive_only=args.positive_only,
-        pin_memory=args.pin_memory,
-        prefetch_factor=args.prefetch_factor,
-        use_gpu_augment=not args.cpu_augment,
-        train_crop_size=(
-            args.train_depth_window_size,
-            args.train_spatial_window_size,
-            args.train_spatial_window_size,
-        ),
-        valid_crop_size=(
-            args.valid_depth_window_size,
-            args.valid_spatial_window_size,
-            args.valid_spatial_window_size,
-        ),
+        data_root=cfg.data_root,
+        fold=cfg.fold,
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        persistent_workers=cfg.persistent_workers,
+        positive_only=cfg.positive_only,
+        train_crop_size=cfg.train_crop_size,
+        valid_crop_size=cfg.valid_crop_size,
+        pin_memory=cfg.pin_memory,
+        prefetch_factor=cfg.prefetch_factor,
+        use_gpu_augment=cfg.use_gpu_augment,
+        valid_use_gpu_augment=cfg.valid_use_gpu_augment,
     )
     dm.setup()
 
     # -------- Model --------
     model = LitMotorDet(
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-        total_steps=len(dm.train_dataloader()) * args.epochs,
-        nms_algorithm=args.nms_algorithm,
-        nms_switch_thr=args.nms_switch_thr,
+        lr=cfg.lr,
+        weight_decay=cfg.weight_decay,
+        total_steps=len(dm.train_dataloader()) * cfg.epochs,
+        nms_algorithm=cfg.nms_algorithm,
+        nms_switch_thr=cfg.nms_switch_thr,
     )
 
-    if args.transfer_weights:
-        ckpt = torch.load(args.transfer_weights, map_location="cpu")
+    if cfg.transfer_weights:
+        ckpt = torch.load(cfg.transfer_weights, map_location="cpu")
         state_dict = ckpt.get("state_dict", ckpt)
         model.load_state_dict(state_dict, strict=False)
 
     # -------- Trainer --------
     callbacks = []
-    if args.freeze_backbone_epochs > 0:
-        callbacks.append(FreezeBackbone(args.freeze_backbone_epochs))
+    if cfg.freeze_backbone_epochs > 0:
+        callbacks.append(FreezeBackbone(cfg.freeze_backbone_epochs))
 
     trainer = L.Trainer(
-        max_epochs=args.epochs,
-        accelerator="gpu" if args.gpus else "cpu",
-        devices=args.gpus if args.gpus else 1,
+        max_epochs=cfg.epochs,
+        accelerator="gpu" if cfg.gpus else "cpu",
+        devices=cfg.gpus if cfg.gpus else 1,
         precision="16-mixed",          # 사용할 AMP 정밀도
         log_every_n_steps=50,
-        default_root_dir=Path("runs") / f"motor_fold{args.fold}",
+        default_root_dir=Path("runs") / f"motor_fold{cfg.fold}",
         callbacks=callbacks,
     )
 
     trainer.fit(model, datamodule=dm)
+
+
+def main() -> None:
+    args = parse_args()
+    cfg = TrainingConfig.load(args.config, env_prefix=args.env_prefix)
+    train(cfg)
 
 
 if __name__ == "__main__":

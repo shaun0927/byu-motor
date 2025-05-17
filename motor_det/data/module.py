@@ -44,6 +44,8 @@ class MotorDataModule(L.LightningDataModule):
         prefetch_factor: int | None = None,
         use_gpu_augment: bool = True,
         valid_use_gpu_augment: bool | None = None,
+        mixup_prob: float = 0.0,
+        cutmix_prob: float = 0.0,
     ):
         super().__init__()
         self.root = Path(data_root)
@@ -60,6 +62,8 @@ class MotorDataModule(L.LightningDataModule):
         self.valid_use_gpu_augment = (
             self.use_gpu_augment if valid_use_gpu_augment is None else bool(valid_use_gpu_augment)
         )
+        self.mixup_prob = float(mixup_prob)
+        self.cutmix_prob = float(cutmix_prob)
 
     def setup(self, stage=None):
         # spacing map 과 train centers 데이터프레임 읽기
@@ -136,6 +140,8 @@ class MotorDataModule(L.LightningDataModule):
                     vx,
                     crop_size=crop_size,
                     use_gpu=use_gpu,
+                    mixup_prob=self.mixup_prob if training else 0.0,
+                    cutmix_prob=self.cutmix_prob if training else 0.0,
                 )
 
             datasets.append(ds)

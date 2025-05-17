@@ -134,3 +134,80 @@ def random_gaussian_noise_torch(volume: torch.Tensor, std: float = 5.0) -> torch
         volume = volume.float() + noise
         volume.clamp_(0, 255)
     return volume
+
+
+
+def mixup3d(vol_a: np.ndarray, cls_a: np.ndarray, off_a: np.ndarray,
+            vol_b: np.ndarray, cls_b: np.ndarray, off_b: np.ndarray,
+            alpha: float = 0.2):
+    """Apply MixUp to two 3-D samples."""
+    lam = np.random.beta(alpha, alpha)
+    vol = vol_a.astype(np.float32) * lam + vol_b.astype(np.float32) * (1.0 - lam)
+    vol = np.clip(vol, 0, 255).astype(np.uint8)
+    cls = cls_a * lam + cls_b * (1.0 - lam)
+    off = off_a * lam + off_b * (1.0 - lam)
+    return vol, cls, off
+
+
+def cutmix3d(vol_a: np.ndarray, cls_a: np.ndarray, off_a: np.ndarray,
+             vol_b: np.ndarray, cls_b: np.ndarray, off_b: np.ndarray,
+             alpha: float = 1.0):
+    """Apply CutMix to two 3-D samples."""
+    lam = np.random.beta(alpha, alpha)
+    D, H, W = vol_a.shape
+    cut_ratio = (1.0 - lam) ** (1.0 / 3.0)
+    dz = max(1, int(D * cut_ratio))
+    dy = max(1, int(H * cut_ratio))
+    dx = max(1, int(W * cut_ratio))
+    z0 = np.random.randint(0, max(1, D - dz + 1))
+    y0 = np.random.randint(0, max(1, H - dy + 1))
+    x0 = np.random.randint(0, max(1, W - dx + 1))
+    z1, y1, x1 = z0 + dz, y0 + dy, x0 + dx
+    vol = vol_a.copy()
+    vol[z0:z1, y0:y1, x0:x1] = vol_b[z0:z1, y0:y1, x0:x1]
+    cls = cls_a.copy()
+    off = off_a.copy()
+    gz0, gy0, gx0 = z0 // 2, y0 // 2, x0 // 2
+    gz1, gy1, gx1 = z1 // 2, y1 // 2, x1 // 2
+    cls[:, gz0:gz1, gy0:gy1, gx0:gx1] = cls_b[:, gz0:gz1, gy0:gy1, gx0:gx1]
+    off[:, gz0:gz1, gy0:gy1, gx0:gx1] = off_b[:, gz0:gz1, gy0:gy1, gx0:gx1]
+    return vol, cls, off
+
+
+def mixup3d_torch(vol_a: torch.Tensor, cls_a: torch.Tensor, off_a: torch.Tensor,
+                  vol_b: torch.Tensor, cls_b: torch.Tensor, off_b: torch.Tensor,
+                  alpha: float = 0.2):
+    """CUDA version of :func:`mixup3d`."""
+    lam = float(torch.distributions.Beta(alpha, alpha).sample())
+    vol = vol_a.float().mul(lam).add_(vol_b.float(), alpha=1.0 - lam)
+    vol.clamp_(0, 255)
+    vol = vol.type_as(vol_a)
+    cls = cls_a.mul(lam).add_(cls_b, alpha=1.0 - lam)
+    off = off_a.mul(lam).add_(off_b, alpha=1.0 - lam)
+    return vol, cls, off
+
+
+def cutmix3d_torch(vol_a: torch.Tensor, cls_a: torch.Tensor, off_a: torch.Tensor,
+                   vol_b: torch.Tensor, cls_b: torch.Tensor, off_b: torch.Tensor,
+                   alpha: float = 1.0):
+    """CUDA version of :func:`cutmix3d`."""
+    lam = float(torch.distributions.Beta(alpha, alpha).sample())
+    D, H, W = vol_a.shape
+    cut_ratio = (1.0 - lam) ** (1.0 / 3.0)
+    dz = max(1, int(D * cut_ratio))
+    dy = max(1, int(H * cut_ratio))
+    dx = max(1, int(W * cut_ratio))
+    z0 = int(torch.randint(0, max(1, D - dz + 1), (1,)))
+    y0 = int(torch.randint(0, max(1, H - dy + 1), (1,)))
+    x0 = int(torch.randint(0, max(1, W - dx + 1), (1,)))
+    z1, y1, x1 = z0 + dz, y0 + dy, x0 + dx
+    vol = vol_a.clone()
+    vol[z0:z1, y0:y1, x0:x1] = vol_b[z0:z1, y0:y1, x0:x1]
+    cls = cls_a.clone()
+    off = off_a.clone()
+    gz0, gy0, gx0 = z0 // 2, y0 // 2, x0 // 2
+    gz1, gy1, gx1 = z1 // 2, y1 // 2, x1 // 2
+    cls[:, gz0:gz1, gy0:gy1, gx0:gx1] = cls_b[:, gz0:gz1, gy0:gy1, gx0:gx1]
+    off[:, gz0:gz1, gy0:gy1, gx0:gx1] = off_b[:, gz0:gz1, gy0:gy1, gx0:gx1]
+    return vol, cls, off
+
