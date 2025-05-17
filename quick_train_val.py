@@ -21,9 +21,11 @@ cfg = TrainingConfig(
     persistent_workers=True,
     valid_use_gpu_augment=False,
     pin_memory=True,
+    prefetch_factor=2,
     epochs=10,
     max_steps=1500,
     val_check_interval=1500,
+    num_sanity_val_steps=0,
     limit_val_batches=0.1,
 )
 

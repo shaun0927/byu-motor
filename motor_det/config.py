@@ -62,13 +62,13 @@ class TrainingConfig:
     data_root: str
     fold: int = 0
     batch_size: int = 2
-    num_workers: int = 4
-    persistent_workers: bool = False
+    num_workers: int = 12
+    persistent_workers: bool = True
     positive_only: bool = False
     train_crop_size: tuple[int, int, int] = (96, 128, 128)
     valid_crop_size: tuple[int, int, int] = (192, 128, 128)
     pin_memory: bool = False
-    prefetch_factor: int | None = None
+    prefetch_factor: int | None = 2
     use_gpu_augment: bool = True
     valid_use_gpu_augment: bool | None = False
     mixup_prob: float = 0.0
@@ -84,6 +84,7 @@ class TrainingConfig:
     max_steps: int | None = None
     limit_val_batches: float | int = 1.0
     val_check_interval: float | int = 1.0
+    num_sanity_val_steps: int = 0
 
     @classmethod
     def load(cls, path: str | Path | None = None, *, env_prefix: str | None = "BYU_TRAIN_") -> "TrainingConfig":

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple
+from collections import OrderedDict
 
 import torch
 
@@ -43,12 +44,16 @@ class SlidingWindowDataset(Dataset):
         window: Tuple[int, int, int] = (192, 128, 128),
         stride: Tuple[int, int, int] = (96, 64, 64),
         dtype=np.float32,
+        *,
+        cache_size: int = 128,
     ):
         self.store = zarr.open(zarr_path, mode="r")  # no copy ✓
         self.win = window  # <─★ win 로 한 번 더 보관
         self.window = window
         self.stride = stride
         self.dtype = dtype
+        self._cache_size = int(cache_size)
+        self._patch_cache: OrderedDict[Tuple[int, int, int], np.ndarray] = OrderedDict()
 
     @torch.cached_property
     def tiles(self) -> List[Tuple[slice, slice, slice]]:
@@ -59,7 +64,15 @@ class SlidingWindowDataset(Dataset):
 
     def __getitem__(self, idx):
         tz, ty, tx = self.tiles[idx]
-        patch = self.store[tz, ty, tx].astype(self.dtype)  # lazy read
+        key = (tz.start, ty.start, tx.start)
+        if key in self._patch_cache:
+            self._patch_cache.move_to_end(key)
+            patch = self._patch_cache[key]
+        else:
+            patch = self.store[tz, ty, tx].astype(self.dtype)
+            self._patch_cache[key] = patch
+            if len(self._patch_cache) > self._cache_size:
+                self._patch_cache.popitem(last=False)
         # pad if needed (right / bottom / back edge)
         dz, dy, dx = self.window
         pad = (
