@@ -29,7 +29,7 @@ def motor_detection_loss(
     -------
     loss  : scalar tensor
     logs  : dict(str -> float)  (for Lightning self.log_dict)
-    pos_weight : optional positive class weight for BCE
+    pos_weight : optional positive class weight for BCEWithLogits
     """
     # ─── 1. 분리 ───────────────────────────────────────────────
     pred_cls:  Tensor = pred["cls"]    # (B,1,D',H',W')
@@ -38,15 +38,15 @@ def motor_detection_loss(
     gt_cls:   Tensor = batch["cls"]    # same shape
     gt_off:   Tensor = batch["offset"] # same shape
 
-    # ─── 2. Classification BCE  ──────────────────────────────
+    # ─── 2. Classification BCEWithLogits ──────────────────────────────
     with torch.cuda.amp.autocast(enabled=False):        # <─ AMP off
         if pos_weight is None:
             pos = gt_cls.sum()
             neg = gt_cls.numel() - pos
             w = (neg / pos) if pos > 0 else 1.0
             pos_weight = torch.tensor(w, device=pred_cls.device)
-        bce = F.binary_cross_entropy(
-            pred_cls.float(),       # 32-bit
+        bce = F.binary_cross_entropy_with_logits(
+            pred_cls.float(),       # logits (32-bit)
             gt_cls.float(),
             weight=None,
             pos_weight=pos_weight,
