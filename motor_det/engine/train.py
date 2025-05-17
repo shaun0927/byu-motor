@@ -30,6 +30,8 @@ def parse_args():
     p.add_argument("--num_workers", type=int, default=4, help="DataLoader worker processes")
     p.add_argument("--persistent_workers", action="store_true", help="Reuse workers across epochs")
     p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--num_workers", type=int, default=4, help="Number of DataLoader workers")
+    p.add_argument("--persistent_workers", action="store_true", help="Keep DataLoader workers alive between epochs")
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)
     p.add_argument("--fold", type=int, default=0)
@@ -132,6 +134,8 @@ def main() -> None:
     cfg.num_workers = args.num_workers
     cfg.persistent_workers = args.persistent_workers
     cfg.epochs = args.epochs
+    cfg.num_workers = args.num_workers
+    cfg.persistent_workers = args.persistent_workers
     cfg.lr = args.lr
     cfg.weight_decay = args.weight_decay
     cfg.fold = args.fold
