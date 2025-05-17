@@ -44,15 +44,16 @@ class MotorTrainDataset(Dataset):
         Z, Y, X = self.vol.shape
 
         # 1) positive / negative crop 선택
-        if np.random.rand() > self.neg_ratio and len(self.centers) > 0:
+        use_negative = np.random.rand() < self.neg_ratio or len(self.centers) == 0
+        if use_negative:
+            z0 = np.random.randint(0, Z - D + 1)
+            y0 = np.random.randint(0, Y - H + 1)
+            x0 = np.random.randint(0, X - W + 1)
+        else:
             ctr = self.centers[np.random.randint(len(self.centers))]
             z0 = int(np.clip(ctr[2] - D // 2, 0, Z - D))
             y0 = int(np.clip(ctr[1] - H // 2, 0, Y - H))
             x0 = int(np.clip(ctr[0] - W // 2, 0, X - W))
-        else:
-            z0 = np.random.randint(0, Z - D + 1)
-            y0 = np.random.randint(0, Y - H + 1)
-            x0 = np.random.randint(0, X - W + 1)
         z1, y1, x1 = z0 + D, y0 + H, x0 + W
 
         # 2) 패치 읽어서 정규화
@@ -177,7 +178,13 @@ class MotorInstanceCropDataset(Dataset):
             "offset": off_t,
             "centers_Å": centers_A,
         }
+    
+class PositiveOnlyCropDataset(MotorInstanceCropDataset):
+    """Dataset that samples only positive crops around ground-truth centers."""
 
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs["negative_ratio"] = 0.0
+        super().__init__(*args, **kwargs)
 
 class BackgroundRandomCropDataset(Dataset):
     """Simple negative crop dataset used with ``ConcatDataset``."""
@@ -212,4 +219,68 @@ class BackgroundRandomCropDataset(Dataset):
             "cls": cls_t,
             "offset": off_t,
             "centers_Å": torch.empty((0, 3), dtype=torch.float32),
+        }
+
+class MotorPositiveCropDataset(Dataset):
+    """Dataset that returns one crop around each GT center (positive only)."""
+
+    def __init__(
+        self,
+        zarr_path: Path,
+        center_xyz: np.ndarray,
+        voxel_spacing: float,
+        crop_size: Tuple[int, int, int] = (96, 128, 128),
+        jitter: int = 0,
+    ) -> None:
+        self.vol = zarr.open(zarr_path, mode="r")
+        # voxel coordinates of ground-truth centers
+        self.pos_centers = center_xyz.astype(np.float32) / voxel_spacing
+        self.spacing = float(voxel_spacing)
+        self.crop_size = crop_size
+        self.jitter = int(jitter)
+
+    def __len__(self) -> int:
+        return len(self.pos_centers)
+
+    def __getitem__(self, idx: int):
+        ctr = self.pos_centers[idx]
+
+        patch, start = random_crop_around_point(
+            self.vol, ctr, self.crop_size, jitter=self.jitter
+        )
+        z0, y0, x0 = start
+        z1, y1, x1 = (
+            z0 + self.crop_size[0],
+            y0 + self.crop_size[1],
+            x0 + self.crop_size[2],
+        )
+
+        mask = (
+            (self.pos_centers[:, 2] >= z0)
+            & (self.pos_centers[:, 2] < z1)
+            & (self.pos_centers[:, 1] >= y0)
+            & (self.pos_centers[:, 1] < y1)
+            & (self.pos_centers[:, 0] >= x0)
+            & (self.pos_centers[:, 0] < x1)
+        )
+        centers_local = self.pos_centers[mask] - np.array([x0, y0, z0], np.float32)
+
+        cls_map, off_map = build_target_maps(
+            centers_local,
+            crop_size=self.crop_size,
+            stride=2,
+        )
+
+        patch, cls_map, off_map = random_flip3d(patch, cls_map, off_map)
+
+        img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
+        cls_t = torch.from_numpy(cls_map.astype(np.float32))
+        off_t = torch.from_numpy(off_map.astype(np.float32))
+        centers_A = torch.from_numpy((centers_local * self.spacing).astype(np.float32))
+
+        return {
+            "image": img_t,
+            "cls": cls_t,
+            "offset": off_t,
+            "centers_Å": centers_A,
         }

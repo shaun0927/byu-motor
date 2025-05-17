@@ -43,17 +43,32 @@ def random_crop_around_point(
     D, H, W = crop_size
     Z, Y, X = volume.shape
 
+    # Jitter crop centre then compute the starting coordinates.  ``ctr`` is kept
+    # as float so that rounding happens only once when casting to ``int``.
+
     ctr = center.astype(float)
     if jitter:
         ctr += np.random.randint(-jitter, jitter + 1, size=3)
 
-    # Clamp starting coordinates so that z1/y1/x1 never exceed the volume
-    # dimensions when the volume is larger than ``crop_size``.  ``max(0, Z - D)``
-    # handles the case where ``Z < D`` by limiting the upper bound to ``0``.
-    z0 = int(np.clip(ctr[2] - D // 2, 0, max(0, Z - D)))
-    y0 = int(np.clip(ctr[1] - H // 2, 0, max(0, Y - H)))
-    x0 = int(np.clip(ctr[0] - W // 2, 0, max(0, X - W)))
-    z1, y1, x1 = z0 + D, y0 + H, x0 + W
+    start = ctr[[2, 1, 0]] - np.array(crop_size) / 2  # (z,y,x) order
+    start = np.round(start).astype(int)
+    start = np.clip(start, 0, np.maximum(0, np.array([Z - D, Y - H, X - W])))
+
+    end = start + np.array(crop_size)
+
+    # Ensure that the original ``center`` is inside the crop after clamping.
+    cz, cy, cx = center[2], center[1], center[0]
+    if not (start[0] <= cz < end[0]):
+        start[0] = int(np.clip(cz - D // 2, 0, max(0, Z - D)))
+    if not (start[1] <= cy < end[1]):
+        start[1] = int(np.clip(cy - H // 2, 0, max(0, Y - H)))
+    if not (start[2] <= cx < end[2]):
+        start[2] = int(np.clip(cx - W // 2, 0, max(0, X - W)))
+
+    end = start + np.array(crop_size)
+
+    z0, y0, x0 = start
+    z1, y1, x1 = end
 
     patch = np.asarray(volume[z0:z1, y0:y1, x0:x1], dtype=np.uint8)
     return patch, (z0, y0, x0)
