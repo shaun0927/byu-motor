@@ -53,6 +53,8 @@ trainer = Trainer(
 start = time.time()
 # Vectorized NMS is used by default and automatically switches to greedy
 # when more than 1,000 proposals are present.
-trainer.fit(LitMotorDet(nms_algorithm="vectorized"), dm)
+
+trainer.fit(LitMotorDet(nms_algorithm="vectorized", nms_switch_thr=1000), dm)
+
 print(f"\u2714\ufe0e 전체 학습+검증 완료  in {time.time() - start:.1f}s")
 print("Best checkpoint:", ckpt_cb.best_model_path)
