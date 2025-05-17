@@ -44,7 +44,7 @@ def motor_detection_loss(
             pos = gt_cls.sum()
             neg = gt_cls.numel() - pos
             w = (neg / pos) if pos > 0 else 1.0
-            pos_weight = torch.tensor(w, device=pred_cls.device)
+            pos_weight = torch.tensor(float(w), device=pred_cls.device)
         bce = F.binary_cross_entropy_with_logits(
             pred_cls.float(),       # logits (32-bit)
             gt_cls.float(),
