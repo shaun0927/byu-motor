@@ -21,6 +21,8 @@ class MotorDataModule(L.LightningDataModule):
         num_workers: int = 4,
         persistent_workers: bool = False,
         positive_only: bool = False,
+        train_crop_size: tuple[int, int, int] = (96, 128, 128),
+        valid_crop_size: tuple[int, int, int] = (192, 128, 128),
     ):
         super().__init__()
         self.root = Path(data_root)
@@ -29,6 +31,8 @@ class MotorDataModule(L.LightningDataModule):
         self.nw = num_workers
         self.persistent_workers = persistent_workers
         self.positive_only = bool(positive_only)
+        self.train_crop_size = tuple(train_crop_size)
+        self.valid_crop_size = tuple(valid_crop_size)
 
     def setup(self, stage=None):
         # spacing map 과 train centers 데이터프레임 읽기
@@ -60,6 +64,7 @@ class MotorDataModule(L.LightningDataModule):
 
     def _build_ds(self, ids, centers_df, spacing_map, training=True):
         datasets = []
+        crop_size = self.train_crop_size if training else self.valid_crop_size
         for tid in ids:
             # 빈 문자열이나 None 은 건너뜁니다
             if not tid:
@@ -82,9 +87,19 @@ class MotorDataModule(L.LightningDataModule):
                 continue
 
             if self.positive_only:
-                ds = PositiveOnlyCropDataset(zarr_path, centers, vx)
+                ds = PositiveOnlyCropDataset(
+                    zarr_path,
+                    centers,
+                    vx,
+                    crop_size=crop_size,
+                )
             else:
-                ds = MotorTrainDataset(zarr_path, centers, vx)
+                ds = MotorTrainDataset(
+                    zarr_path,
+                    centers,
+                    vx,
+                    crop_size=crop_size,
+                )
 
             datasets.append(ds)
 
