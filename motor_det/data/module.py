@@ -23,6 +23,11 @@ class MotorDataModule(L.LightningDataModule):
     augmentation on CUDA tensors.  In this mode ``pin_memory`` should remain
     ``False`` because PyTorch cannot pin already CUDA-resident tensors and will
     raise ``RuntimeError`` when the DataLoader attempts to do so.
+
+    The ``valid_use_gpu_augment`` flag controls whether the validation dataset
+    also runs augmentation on GPU.  If omitted, it defaults to the value of
+    ``use_gpu_augment``.  Disabling GPU augmentation for validation is often
+    faster.
     """
     def __init__(
         self,
@@ -38,6 +43,7 @@ class MotorDataModule(L.LightningDataModule):
         pin_memory: bool = False,
         prefetch_factor: int | None = None,
         use_gpu_augment: bool = True,
+        valid_use_gpu_augment: bool | None = None,
     ):
         super().__init__()
         self.root = Path(data_root)
@@ -51,6 +57,9 @@ class MotorDataModule(L.LightningDataModule):
         self.pin_memory = bool(pin_memory)
         self.prefetch_factor = prefetch_factor
         self.use_gpu_augment = bool(use_gpu_augment)
+        self.valid_use_gpu_augment = (
+            self.use_gpu_augment if valid_use_gpu_augment is None else bool(valid_use_gpu_augment)
+        )
 
     def setup(self, stage=None):
         # spacing map 과 train centers 데이터프레임 읽기
@@ -77,10 +86,18 @@ class MotorDataModule(L.LightningDataModule):
         train_ids = centers_df.loc[centers_df["fold"] != self.fold, "tomo_id"].unique()
 
         # 데이터셋 생성
-        self.ds_train = self._build_ds(train_ids, centers_df, spacing_map, training=True)
-        self.ds_val   = self._build_ds(val_ids,   centers_df, spacing_map, training=False)
+        self.ds_train = self._build_ds(
+            train_ids, centers_df, spacing_map, training=True, use_gpu=self.use_gpu_augment
+        )
+        self.ds_val = self._build_ds(
+            val_ids,
+            centers_df,
+            spacing_map,
+            training=False,
+            use_gpu=self.valid_use_gpu_augment,
+        )
 
-    def _build_ds(self, ids, centers_df, spacing_map, training=True):
+    def _build_ds(self, ids, centers_df, spacing_map, training=True, *, use_gpu=True):
         datasets = []
         crop_size = self.train_crop_size if training else self.valid_crop_size
         for tid in ids:
@@ -110,7 +127,7 @@ class MotorDataModule(L.LightningDataModule):
                     centers,
                     vx,
                     crop_size=crop_size,
-                    use_gpu=self.use_gpu_augment,
+                    use_gpu=use_gpu,
                 )
             else:
                 ds = MotorTrainDataset(
@@ -118,7 +135,7 @@ class MotorDataModule(L.LightningDataModule):
                     centers,
                     vx,
                     crop_size=crop_size,
-                    use_gpu=self.use_gpu_augment,
+                    use_gpu=use_gpu,
                 )
 
             datasets.append(ds)
