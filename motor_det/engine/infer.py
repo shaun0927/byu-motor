@@ -63,8 +63,21 @@ def infer_single_tomo(
 ) -> np.ndarray:
     """Return predicted motor centre for one tomogram in Å units."""
 
-    ds = SlidingWindowDataset(zarr_path, window=window, stride=stride, dtype=np.float32)
-    loader = DataLoader(ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
+    ds = SlidingWindowDataset(
+        zarr_path,
+        window=window,
+        stride=stride,
+        dtype=np.float32,
+        cache_size=64,
+    )
+    loader = DataLoader(
+        ds,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2,
+    )
 
     D_o, H_o, W_o = (s // stride_head for s in ds.store.shape)
     acc_prob = np.zeros((D_o, H_o, W_o), np.float32)

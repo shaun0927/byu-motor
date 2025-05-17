@@ -60,11 +60,9 @@ python -m motor_det.engine.train \
 
 검증 단계에서 사용할 NMS 방식은 `nms_algorithm` 옵션으로 결정하며 기본값인 `vectorized` 모드는 탐지 개수가 `--nms_switch_thr`를 넘으면 자동으로 `greedy`로 전환됩니다.
 
-`--cpu_augment`를 사용하면 증강을 CPU에서 수행합니다. 이 경우 `--pin_memory`를 함께 지정하면 데이터 전송 속도를 높일 수 있습니다. 데이터 로더 초기화를 줄이고 싶다면 `--persistent_workers` 플래그를 켜고 `--num_workers` 값도 조정하세요.
+`--cpu_augment`를 사용하면 증강을 CPU에서 수행합니다. 이 경우 `--pin_memory`를 함께 지정하면 데이터 전송 속도를 높일 수 있습니다. 본 스크립트는 기본적으로 `persistent_workers=True`와 `prefetch_factor=2`를 사용해 데이터 로더 초기화를 최소화합니다. 필요하면 `--no-persistent_workers` 플래그로 끌 수 있습니다.
 
-학습 로그와 체크포인트는 `runs/motor_fold<fold>` 하위에 저장됩니다. 진행 상황은 다음과 같이 확인합니다.
-
-`persistent_workers=True`로 설정하면 각 에폭마다 데이터로더 작업자를 재생성하지 않아 속도가 향상됩니다. 본 스크립트는 `--persistent_workers` 플래그로 이 기능을 켤 수 있습니다.
+슬라이딩 윈도우 추론 시에는 패치를 메모리 캐시에 저장해 중복 I/O를 줄입니다.
 
 학습 로그와 체크포인트는 `runs/motor_fold<fold>` 아래에 저장되며 TensorBoard로 모니터링할 수 있습니다:
 
