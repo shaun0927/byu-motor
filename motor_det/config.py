@@ -83,6 +83,7 @@ class TrainingConfig:
     nms_switch_thr: int = 1000
     max_steps: int | None = None
     limit_val_batches: float | int = 1.0
+    val_check_interval: float | int = 1.0
 
     @classmethod
     def load(cls, path: str | Path | None = None, *, env_prefix: str | None = "BYU_TRAIN_") -> "TrainingConfig":
