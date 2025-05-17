@@ -71,7 +71,7 @@ class LitMotorDet(L.LightningModule):
         offsets = preds["offset"]
 
         centers_pred = decode_with_nms(
-            logits, offsets, stride=2,
+            logits, offsets, stride=4,
             prob_thr=0.5, sigma=60.0, iou_thr=0.25
         )[0]
 
