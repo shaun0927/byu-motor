@@ -60,6 +60,7 @@ def infer_single_tomo(
     """
     하나의 톰ogram을 sliding-window + Hann 가중치 + NMS로 추론하여
     motor center를 Å 단위 (X,Y,Z) 로 반환합니다.
+    ``spacing_Å`` 는 1 voxel 당 Å 길이입니다.
     """
     # ─── DataLoader 준비 ─────────────────────────────────
     ds = SlidingWindowDataset(zarr_path, window=window, stride=stride, dtype=np.float32)
@@ -131,9 +132,10 @@ def infer_single_tomo(
     ctr_voxel = np.array([x, y, z], dtype=np.float32) * stride_head \
                 + np.array([off_x, off_y, off_z], dtype=np.float32)
 
-    # 7.4) Å 단위로 변환 (올바른 코드, 순서 유지: [x, y, z])
-    ctr_voxel_xyz = ctr_voxel[::-1]          # (3,)
-    return ctr_voxel_xyz[None, :]            # (1,3)
+    # 7.4) Å 단위로 변환 (1 voxel = spacing_Å Å, 순서 유지: [x, y, z])
+    ctr_voxel_xyz = ctr_voxel[::-1]                    # (3,)
+    ctr_A_xyz = ctr_voxel_xyz * spacing_Å              # (3,)
+    return ctr_A_xyz[None, :]                          # (1,3)
 
 
 def main(cfg):
