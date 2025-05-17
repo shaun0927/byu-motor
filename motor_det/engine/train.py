@@ -39,6 +39,8 @@ def parse_args():
     p.add_argument("--pin_memory", action="store_true", help="Enable DataLoader pin_memory")
     p.add_argument("--prefetch_factor", type=int, default=None)
     p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
+    p.add_argument("--mixup", type=float, default=0.0, help="MixUp probability")
+    p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
     p.add_argument(
         "--nms_algorithm",
         type=str,
@@ -78,6 +80,8 @@ def main():
             args.valid_spatial_window_size,
             args.valid_spatial_window_size,
         ),
+        mixup_prob=args.mixup,
+        cutmix_prob=args.cutmix,
     )
     dm.setup()
 

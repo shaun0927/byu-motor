@@ -60,6 +60,7 @@ def infer_single_tomo(
     iou_thr: float,
     device: torch.device,
     early_exit_thr: float | None = None,
+    flip_tta: bool = False,
 ) -> np.ndarray:
     """
     하나의 톰ogram을 sliding-window + Hann 가중치 + NMS로 추론하여
@@ -84,35 +85,47 @@ def infer_single_tomo(
     amp_ctx = torch.cuda.amp.autocast if device.type == "cuda" else torch.cpu.amp.autocast
 
     # ─── sliding-window 루프 ───────────────────────────────
+    orientations = [()]
+    if flip_tta:
+        orientations += [(0,), (1,), (2,)]
+
     with amp_ctx():
         stop = False
         for patches, origins in tqdm(loader, desc=zarr_path.stem, leave=False):
-            # patches: (B,1,D_win,H_win,W_win)
-            # origins: tuple of 3 tensors (oz_batch, oy_batch, ox_batch), each shape (B,)
             patches = patches.to(device, non_blocking=True) / 255.0
-            out     = net(patches)
-            logits  = out["cls"]     # (B,1,D',H',W')
-            offsets = out["offset"]  # (B,3,D',H',W')
+            for axes in orientations:
+                p = patches
+                if axes:
+                    dims = [ax + 2 for ax in axes]
+                    p = torch.flip(p, dims=dims)
+                out = net(p)
+                logits = out["cls"]
+                offsets = out["offset"]
+                if axes:
+                    logits = torch.flip(logits, dims=dims)
+                    offsets = torch.flip(offsets, dims=dims)
+                    for ax in axes:
+                        offsets[:, ax].neg_()
 
-            prob_np = torch.sigmoid(logits).cpu().numpy()[:, 0, ...]  # (B,D',H',W')
-            offs_np = offsets.cpu().numpy()                          # (B,3,D',H',W')
+                prob_np = torch.sigmoid(logits).cpu().numpy()[:, 0, ...]
+                offs_np = offsets.cpu().numpy()
 
-            B = prob_np.shape[0]
-            for b in range(B):
-                oz, oy, ox = (origins[k][b].item() // stride_head for k in range(3))
-                dz, dy, dx = prob_np[b].shape
+                B = prob_np.shape[0]
+                for b in range(B):
+                    oz, oy, ox = (origins[k][b].item() // stride_head for k in range(3))
+                    dz, dy, dx = prob_np[b].shape
 
-                prob_b   = prob_np[b, :dz, :dy, :dx]          # (dz,dy,dx)
-                offs_b   = offs_np[b, :, :dz, :dy, :dx]       # (3,dz,dy,dx)
-                hann_bds = hann_ds[:dz, :dy, :dx]             # (dz,dy,dx)
+                    prob_b   = prob_np[b, :dz, :dy, :dx]
+                    offs_b   = offs_np[b, :, :dz, :dy, :dx]
+                    hann_bds = hann_ds[:dz, :dy, :dx]
 
-                slz = slice(oz, oz + dz)
-                sly = slice(oy, oy + dy)
-                slx = slice(ox, ox + dx)
+                    slz = slice(oz, oz + dz)
+                    sly = slice(oy, oy + dy)
+                    slx = slice(ox, ox + dx)
 
-                acc_prob [slz, sly, slx]   += prob_b * hann_bds
-                acc_offs[:, slz, sly, slx] += offs_b * hann_bds
-                acc_w   [slz, sly, slx]    += hann_bds
+                    acc_prob [slz, sly, slx]   += prob_b * hann_bds
+                    acc_offs[:, slz, sly, slx] += offs_b * hann_bds
+                    acc_w   [slz, sly, slx]    += hann_bds
 
             if early_exit_thr is not None and acc_prob.max() >= early_exit_thr:
                 stop = True
@@ -172,6 +185,7 @@ def main(cfg):
             iou_thr     = cfg.iou_thr,
             device      = device,
             early_exit_thr = cfg.early_exit,
+            flip_tta    = cfg.flip_tta,
         )
         if ctrs.size == 0:
             rows.append([tid, -1, -1, -1])
@@ -210,5 +224,6 @@ if __name__ == "__main__":
         default=DEFAULT_TEST_SPACING,
     )
     parser.add_argument("--early_exit", type=float, default=None)
+    parser.add_argument("--flip_tta", action="store_true", help="Enable flip test-time augmentation")
     args = parser.parse_args()
     main(args)

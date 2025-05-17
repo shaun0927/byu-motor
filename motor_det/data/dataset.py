@@ -17,6 +17,10 @@ from motor_det.utils.augment import (
     random_flip3d_torch,
     random_erase3d_torch,
     random_gaussian_noise_torch,
+    mixup3d,
+    cutmix3d,
+    mixup3d_torch,
+    cutmix3d_torch,
 )
 
 
@@ -42,6 +46,8 @@ class MotorTrainDataset(Dataset):
         cache_size: int = 128,
         *,
         use_gpu: bool = True,
+        mixup_prob: float = 0.0,
+        cutmix_prob: float = 0.0,
     ):
         self.vol = zarr.open(zarr_path, mode="r")
         self.centers = center_xyz.astype(np.float32) / voxel_spacing
@@ -52,6 +58,8 @@ class MotorTrainDataset(Dataset):
         # simple ordered dict for manual LRU cache
         self._patch_cache: OrderedDict[tuple[int, int, int], np.ndarray] = OrderedDict()
         self.use_gpu = bool(use_gpu) and torch.cuda.is_available()
+        self.mixup_prob = float(mixup_prob)
+        self.cutmix_prob = float(cutmix_prob)
 
     def _load_patch_cached(self, z0: int, y0: int, x0: int) -> np.ndarray:
         key = (z0, y0, x0)
@@ -67,17 +75,10 @@ class MotorTrainDataset(Dataset):
             self._patch_cache.popitem(last=False)
         return patch
 
-    def __len__(self):
-        # dataset length proportional to number of positive centres
-        n_pos = len(self.centers)
-        n_total = int(n_pos * (1 + self.neg_ratio))
-        return max(n_total, 64)
-
-    def __getitem__(self, idx):
+    def _sample_patch_maps(self):
+        """Sample one crop and return (patch, cls_map, off_map, centers_local)."""
         D, H, W = self.crop_size
         Z, Y, X = self.vol.shape
-
-        # 1) positive / negative crop 선택
         use_negative = np.random.rand() < self.neg_ratio or len(self.centers) == 0
         if use_negative:
             z0 = np.random.randint(0, Z - D + 1)
@@ -90,10 +91,8 @@ class MotorTrainDataset(Dataset):
             x0 = int(np.clip(ctr[0] - W // 2, 0, X - W))
         z1, y1, x1 = z0 + D, y0 + H, x0 + W
 
-        # 2) 패치 읽어서 정규화 (LRU cache 활용)
         patch = self._load_patch_cached(z0, y0, x0).copy()
 
-        # 3) GT 필터 & 타겟 맵 생성
         mask = (
             (self.centers[:, 2] >= z0)
             & (self.centers[:, 2] < z1)
@@ -103,34 +102,60 @@ class MotorTrainDataset(Dataset):
             & (self.centers[:, 0] < x1)
         )
         centers_local = self.centers[mask] - np.array([x0, y0, z0], dtype=np.float32)
+
         if self.use_gpu:
             device = torch.device("cuda")
             centers_t = torch.from_numpy(centers_local.astype(np.float32)).to(device)
             cls_map_t, off_map_t = build_target_maps_torch(
-                centers_t,
-                crop_size=self.crop_size,
-                stride=2,
-                device=device,
+                centers_t, crop_size=self.crop_size, stride=2, device=device
             )
-
             patch_t = torch.from_numpy(patch.astype(np.float32)).to(device)
             patch_t, cls_map_t, off_map_t = random_flip3d_torch(patch_t, cls_map_t, off_map_t)
             patch_t = random_erase3d_torch(patch_t)
             patch_t = random_gaussian_noise_torch(patch_t)
-            img_t = (patch_t / 255.0).unsqueeze(0)
-            centers_A = centers_t * self.spacing
+            return patch_t, cls_map_t, off_map_t, centers_local
         else:
             cls_map_np, off_map_np = build_target_maps(
-                centers_local.astype(np.float32),
-                crop_size=self.crop_size,
-                stride=2,
+                centers_local.astype(np.float32), crop_size=self.crop_size, stride=2
             )
             patch, cls_map_np, off_map_np = random_flip3d(patch, cls_map_np, off_map_np)
             patch = random_erase3d(patch)
             patch = random_gaussian_noise(patch)
+            return patch, cls_map_np, off_map_np, centers_local
+
+    def __len__(self):
+        # dataset length proportional to number of positive centres
+        n_pos = len(self.centers)
+        n_total = int(n_pos * (1 + self.neg_ratio))
+        return max(n_total, 64)
+
+    def __getitem__(self, idx):
+        patch, cls_map, off_map, centers_local = self._sample_patch_maps()
+
+        # optional mixup / cutmix
+        r = np.random.rand()
+        if r < self.mixup_prob:
+            p2, c2, o2, _ = self._sample_patch_maps()
+            if self.use_gpu:
+                patch, cls_map, off_map = mixup3d_torch(patch, cls_map, off_map, p2, c2, o2)
+            else:
+                patch, cls_map, off_map = mixup3d(patch, cls_map, off_map, p2, c2, o2)
+        elif r < self.mixup_prob + self.cutmix_prob:
+            p2, c2, o2, _ = self._sample_patch_maps()
+            if self.use_gpu:
+                patch, cls_map, off_map = cutmix3d_torch(patch, cls_map, off_map, p2, c2, o2)
+            else:
+                patch, cls_map, off_map = cutmix3d(patch, cls_map, off_map, p2, c2, o2)
+
+        if self.use_gpu:
+            img_t = (patch / 255.0).unsqueeze(0)
+            cls_map_t = cls_map
+            off_map_t = off_map
+            centers_A = torch.from_numpy(centers_local.astype(np.float32)).to(patch.device) * self.spacing
+        else:
             img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
-            cls_map_t = torch.from_numpy(cls_map_np)
-            off_map_t = torch.from_numpy(off_map_np)
+            cls_map_t = torch.from_numpy(cls_map)
+            off_map_t = torch.from_numpy(off_map)
             centers_A = torch.from_numpy(centers_local.astype(np.float32) * self.spacing)
 
         return {
