@@ -1,7 +1,7 @@
 # motor_det/data/dataset.py
 from pathlib import Path
 from typing import Tuple
-from functools import lru_cache
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -45,16 +45,23 @@ class MotorTrainDataset(Dataset):
         self.spacing = float(voxel_spacing)
         self.crop_size = crop_size
         self.neg_ratio = negative_ratio
-        self._load_patch_cached = self._make_patch_cache(cache_size)
+        self._cache_size = int(cache_size)
+        # simple ordered dict for manual LRU cache
+        self._patch_cache: OrderedDict[tuple[int, int, int], np.ndarray] = OrderedDict()
 
-    def _make_patch_cache(self, size: int):
-        @lru_cache(maxsize=size)
-        def _loader(z0: int, y0: int, x0: int):
-            D, H, W = self.crop_size
-            z1, y1, x1 = z0 + D, y0 + H, x0 + W
-            return np.asarray(self.vol[z0:z1, y0:y1, x0:x1], dtype=np.uint8)
+    def _load_patch_cached(self, z0: int, y0: int, x0: int) -> np.ndarray:
+        key = (z0, y0, x0)
+        if key in self._patch_cache:
+            self._patch_cache.move_to_end(key)
+            return self._patch_cache[key]
 
-        return _loader
+        D, H, W = self.crop_size
+        z1, y1, x1 = z0 + D, y0 + H, x0 + W
+        patch = np.asarray(self.vol[z0:z1, y0:y1, x0:x1], dtype=np.uint8)
+        self._patch_cache[key] = patch
+        if len(self._patch_cache) > self._cache_size:
+            self._patch_cache.popitem(last=False)
+        return patch
 
     def __len__(self):
         # dataset length proportional to number of positive centres
