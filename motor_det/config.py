@@ -71,6 +71,8 @@ class TrainingConfig:
     prefetch_factor: int | None = None
     use_gpu_augment: bool = True
     valid_use_gpu_augment: bool | None = None
+    mixup_prob: float = 0.0
+    cutmix_prob: float = 0.0
     epochs: int = 10
     lr: float = 3e-4
     weight_decay: float = 1e-4
@@ -79,6 +81,8 @@ class TrainingConfig:
     gpus: int = 1
     nms_algorithm: str = "vectorized"
     nms_switch_thr: int = 1000
+    max_steps: int | None = None
+    limit_val_batches: float | int = 1.0
 
     @classmethod
     def load(cls, path: str | Path | None = None, *, env_prefix: str | None = "BYU_TRAIN_") -> "TrainingConfig":

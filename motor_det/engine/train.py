@@ -44,6 +44,8 @@ def parse_args():
     p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
     p.add_argument("--mixup", type=float, default=0.0, help="MixUp probability")
     p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
+    p.add_argument("--max_steps", type=int, default=None, help="Maximum training steps")
+    p.add_argument("--limit_val_batches", type=float, default=1.0, help="Fraction of validation batches to run")
     p.add_argument(
         "--env_prefix",
         type=str,
@@ -69,14 +71,17 @@ def train(cfg: TrainingConfig):
         prefetch_factor=cfg.prefetch_factor,
         use_gpu_augment=cfg.use_gpu_augment,
         valid_use_gpu_augment=cfg.valid_use_gpu_augment,
+        mixup_prob=cfg.mixup_prob,
+        cutmix_prob=cfg.cutmix_prob,
     )
     dm.setup()
 
     # -------- Model --------
+    total_steps = cfg.max_steps or len(dm.train_dataloader()) * cfg.epochs
     model = LitMotorDet(
         lr=cfg.lr,
         weight_decay=cfg.weight_decay,
-        total_steps=len(dm.train_dataloader()) * cfg.epochs,
+        total_steps=total_steps,
         nms_algorithm=cfg.nms_algorithm,
         nms_switch_thr=cfg.nms_switch_thr,
     )
@@ -93,11 +98,13 @@ def train(cfg: TrainingConfig):
 
     trainer = L.Trainer(
         max_epochs=cfg.epochs,
+        max_steps=cfg.max_steps,
         accelerator="gpu" if cfg.gpus else "cpu",
         devices=cfg.gpus if cfg.gpus else 1,
         precision="16-mixed",          # 사용할 AMP 정밀도
         log_every_n_steps=50,
         default_root_dir=Path("runs") / f"motor_fold{cfg.fold}",
+        limit_val_batches=cfg.limit_val_batches,
         callbacks=callbacks,
     )
 
@@ -106,7 +113,39 @@ def train(cfg: TrainingConfig):
 
 def main() -> None:
     args = parse_args()
-    cfg = TrainingConfig.load(args.config, env_prefix=args.env_prefix)
+    if args.config:
+        cfg = TrainingConfig.load(args.config, env_prefix=args.env_prefix)
+    else:
+        cfg = TrainingConfig(data_root=args.data_root)
+
+    cfg.data_root = args.data_root
+    cfg.batch_size = args.batch_size
+    cfg.epochs = args.epochs
+    cfg.lr = args.lr
+    cfg.weight_decay = args.weight_decay
+    cfg.fold = args.fold
+    cfg.positive_only = args.positive_only
+    cfg.gpus = args.gpus
+    cfg.train_crop_size = (
+        args.train_depth_window_size,
+        args.train_spatial_window_size,
+        args.train_spatial_window_size,
+    )
+    cfg.valid_crop_size = (
+        args.valid_depth_window_size,
+        args.valid_spatial_window_size,
+        args.valid_spatial_window_size,
+    )
+    cfg.transfer_weights = args.transfer_weights
+    cfg.freeze_backbone_epochs = args.freeze_backbone_epochs
+    cfg.pin_memory = args.pin_memory
+    cfg.prefetch_factor = args.prefetch_factor
+    cfg.use_gpu_augment = not args.cpu_augment
+    cfg.mixup_prob = args.mixup
+    cfg.cutmix_prob = args.cutmix
+    cfg.max_steps = args.max_steps
+    cfg.limit_val_batches = args.limit_val_batches
+
     train(cfg)
 
 

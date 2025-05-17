@@ -36,13 +36,17 @@ The directory should look like:
 ```
 
 Specify the location with the `--data_root` argument (or `BYU_DATA_ROOT` environment variable).
+When running commands from a subdirectory, provide an **absolute path** to
+`--data_root` so the dataset is found correctly on Windows.
 
 ## Training
 
 Run a full training session:
 
 ```bash
-python -m motor_det.engine.train --data_root data --batch_size 2 --epochs 10
+python -m motor_det.engine.train \
+  --data_root D:\\project\\Kaggle\\BYU\\byu-motor\\data \
+  --batch_size 2 --epochs 10
 ```
 `nms_algorithm` controls the NMS method during validation. The default `vectorized` mode automatically switches to `greedy` when detections exceed `--nms_switch_thr`.
 
@@ -54,12 +58,28 @@ Use `--cpu_augment` to perform augmentation on the CPU. When using this flag,
 python -m motor_det.engine.train --data_root data --cpu_augment --pin_memory
 ```
 
+`persistent_workers=True` in the dataloaders is optional but can reduce worker
+startup time for repeated epochs.
+
 Training logs and checkpoints are stored under `runs/motor_fold<fold>`.
 Monitor progress with:
 
 ```bash
 tensorboard --logdir runs
 ```
+
+### Quick sanity check
+
+Run a short training cycle to gauge model quality:
+
+```bash
+python -m motor_det.engine.train \
+  --data_root D:\\project\\Kaggle\\BYU\\byu-motor\\data \
+  --batch_size 1 --max_steps 1500 --limit_val_batches 0.1
+```
+
+This trains for roughly 1500 iterations and evaluates on 10% of the validation
+set.
 
 ## Inference
 
