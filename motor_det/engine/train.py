@@ -39,6 +39,19 @@ def parse_args():
     p.add_argument("--pin_memory", action="store_true", help="Enable DataLoader pin_memory")
     p.add_argument("--prefetch_factor", type=int, default=None)
     p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
+    p.add_argument(
+        "--nms_algorithm",
+        type=str,
+        choices=["vectorized", "greedy"],
+        default="vectorized",
+        help="NMS algorithm to use during validation",
+    )
+    p.add_argument(
+        "--nms_switch_thr",
+        type=int,
+        default=1000,
+        help="Switch to greedy NMS when detections exceed this number",
+    )
     return p.parse_args()
 
 
@@ -73,6 +86,8 @@ def main():
         lr=args.lr,
         weight_decay=args.weight_decay,
         total_steps=len(dm.train_dataloader()) * args.epochs,
+        nms_algorithm=args.nms_algorithm,
+        nms_switch_thr=args.nms_switch_thr,
     )
 
     if args.transfer_weights:
