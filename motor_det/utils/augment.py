@@ -32,6 +32,10 @@ def random_crop_around_point(
 ) -> tuple[np.ndarray, tuple[int, int, int]]:
     """Crop a patch around ``center`` with jitter.
 
+    When ``volume`` is larger than ``crop_size`` in every dimension the
+    returned patch is always exactly ``crop_size``.  If the volume is smaller
+    than the requested crop the patch will be truncated accordingly.
+
     Parameters
     ----------
     volume : ``(Z, Y, X)`` ndarray
@@ -47,9 +51,12 @@ def random_crop_around_point(
     if jitter:
         ctr += np.random.randint(-jitter, jitter + 1, size=3)
 
-    z0 = int(np.clip(ctr[2] - D // 2, 0, max(1, Z - D)))
-    y0 = int(np.clip(ctr[1] - H // 2, 0, max(1, Y - H)))
-    x0 = int(np.clip(ctr[0] - W // 2, 0, max(1, X - W)))
+    # Clamp starting coordinates so that z1/y1/x1 never exceed the volume
+    # dimensions when the volume is larger than ``crop_size``.  ``max(0, Z - D)``
+    # handles the case where ``Z < D`` by limiting the upper bound to ``0``.
+    z0 = int(np.clip(ctr[2] - D // 2, 0, max(0, Z - D)))
+    y0 = int(np.clip(ctr[1] - H // 2, 0, max(0, Y - H)))
+    x0 = int(np.clip(ctr[0] - W // 2, 0, max(0, X - W)))
     z1, y1, x1 = z0 + D, y0 + H, x0 + W
 
     patch = np.asarray(volume[z0:z1, y0:y1, x0:x1], dtype=np.uint8)
