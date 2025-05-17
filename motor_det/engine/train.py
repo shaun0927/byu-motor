@@ -69,6 +69,8 @@ def train(cfg: TrainingConfig):
         prefetch_factor=cfg.prefetch_factor,
         use_gpu_augment=cfg.use_gpu_augment,
         valid_use_gpu_augment=cfg.valid_use_gpu_augment,
+        mixup_prob=cfg.mixup_prob,
+        cutmix_prob=cfg.cutmix_prob,
     )
     dm.setup()
 
@@ -106,7 +108,37 @@ def train(cfg: TrainingConfig):
 
 def main() -> None:
     args = parse_args()
-    cfg = TrainingConfig.load(args.config, env_prefix=args.env_prefix)
+    if args.config:
+        cfg = TrainingConfig.load(args.config, env_prefix=args.env_prefix)
+    else:
+        cfg = TrainingConfig(data_root=args.data_root)
+
+    cfg.data_root = args.data_root
+    cfg.batch_size = args.batch_size
+    cfg.epochs = args.epochs
+    cfg.lr = args.lr
+    cfg.weight_decay = args.weight_decay
+    cfg.fold = args.fold
+    cfg.positive_only = args.positive_only
+    cfg.gpus = args.gpus
+    cfg.train_crop_size = (
+        args.train_depth_window_size,
+        args.train_spatial_window_size,
+        args.train_spatial_window_size,
+    )
+    cfg.valid_crop_size = (
+        args.valid_depth_window_size,
+        args.valid_spatial_window_size,
+        args.valid_spatial_window_size,
+    )
+    cfg.transfer_weights = args.transfer_weights
+    cfg.freeze_backbone_epochs = args.freeze_backbone_epochs
+    cfg.pin_memory = args.pin_memory
+    cfg.prefetch_factor = args.prefetch_factor
+    cfg.use_gpu_augment = not args.cpu_augment
+    cfg.mixup_prob = args.mixup
+    cfg.cutmix_prob = args.cutmix
+
     train(cfg)
 
 

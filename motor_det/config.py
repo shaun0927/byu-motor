@@ -71,6 +71,8 @@ class TrainingConfig:
     prefetch_factor: int | None = None
     use_gpu_augment: bool = True
     valid_use_gpu_augment: bool | None = None
+    mixup_prob: float = 0.0
+    cutmix_prob: float = 0.0
     epochs: int = 10
     lr: float = 3e-4
     weight_decay: float = 1e-4
