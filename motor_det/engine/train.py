@@ -23,8 +23,26 @@ from motor_det.config import TrainingConfig
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="BYU Motor training")
-    p.add_argument("--config", type=str, help="YAML/JSON configuration file")
+    p = argparse.ArgumentParser()
+    p.add_argument("--data_root", type=str, required=True)
+    p.add_argument("--batch_size", type=int, default=2)
+    p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--weight_decay", type=float, default=1e-4)
+    p.add_argument("--fold", type=int, default=0)
+    p.add_argument("--positive_only", action="store_true")
+    p.add_argument("--gpus", type=int, default=1)
+    p.add_argument("--train_depth_window_size", type=int, default=96)
+    p.add_argument("--train_spatial_window_size", type=int, default=128)
+    p.add_argument("--valid_depth_window_size", type=int, default=192)
+    p.add_argument("--valid_spatial_window_size", type=int, default=128)
+    p.add_argument("--transfer_weights", type=str, default=None)
+    p.add_argument("--freeze_backbone_epochs", type=int, default=0)
+    p.add_argument("--pin_memory", action="store_true", help="Enable DataLoader pin_memory")
+    p.add_argument("--prefetch_factor", type=int, default=None)
+    p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
+    p.add_argument("--mixup", type=float, default=0.0, help="MixUp probability")
+    p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
     p.add_argument(
         "--env_prefix",
         type=str,
