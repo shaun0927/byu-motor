@@ -1,89 +1,76 @@
-# BYU Motor Detection
+# BYU 모터 탐지
 
-BYU motor detection project for detecting defects in BYU dataset.
+BYU 데이터셋의 모터 결함을 탐지하기 위한 프로젝트입니다.
 
-## Setup
+## 설치
 
-Install with conda using `environment.yml`:
+`environment.yml` 파일을 이용해 conda 환경을 생성합니다:
 
 ```bash
 conda env create -f environment.yml
 conda activate byu-motor
 ```
 
-Alternatively install via `pyproject.toml`:
+`pyproject.toml` 을 직접 사용하여 설치할 수도 있습니다:
 
 ```bash
 pip install -e .
 ```
 
+## 데이터 준비
 
-## Data Preparation
-
-Download the BYU Motor dataset using the Kaggle CLI and place the files under `data/`.
-The directory should look like:
+Kaggle CLI로 BYU 모터 데이터셋을 다운로드한 뒤 `data/` 폴더 아래에 배치합니다. 디렉터리 구조는 다음과 같습니다:
 
 ```
 <DATA_ROOT>/
   raw/
     train_labels.csv
-    train/      # raw training volumes
-    test/       # raw test volumes
+    train/
+    test/
   processed/
     zarr/
       train/<tomo_id>.zarr
       test/<tomo_id>.zarr
 ```
 
-Specify the location with the `--data_root` argument (or `BYU_DATA_ROOT` environment variable).
-When running commands from a subdirectory, provide an **absolute path** to
-`--data_root` so the dataset is found correctly on Windows.
+데이터 위치는 `--data_root` 옵션이나 환경 변수 `BYU_DATA_ROOT` 로 지정합니다. Windows에서 하위 폴더에서 실행할 경우에는 절대 경로를 사용해야 합니다.
 
-## Training
+## 학습
 
-Run a full training session:
+전체 학습을 수행하려면 다음 명령을 실행합니다:
 
 ```bash
 python -m motor_det.engine.train \
-  --data_root D:\\project\\Kaggle\\BYU\\byu-motor\\data \
+  --data_root D:\project\Kaggle\BYU\byu-motor\data \
   --batch_size 2 --epochs 10
 ```
-`nms_algorithm` controls the NMS method during validation. The default `vectorized` mode automatically switches to `greedy` when detections exceed `--nms_switch_thr`.
 
+검증 단계에서 사용할 NMS 알고리즘은 `--nms_algorithm` 옵션으로 조절할 수 있습니다. 기본값인 `vectorized` 모드는 검출 수가 `--nms_switch_thr`를 초과하면 자동으로 `greedy` 모드로 전환됩니다.
 
-Use `--cpu_augment` to perform augmentation on the CPU. When using this flag,
-`--pin_memory` can speed up data transfer:
+`--cpu_augment` 플래그로 CPU에서 증강을 수행할 수 있으며, 이 경우 `--pin_memory` 옵션을 함께 주면 데이터 전송이 빨라집니다. `--num_workers`와 `--persistent_workers` 옵션을 활용하면 DataLoader 초기화 시간을 줄일 수 있습니다.
 
-```bash
-python -m motor_det.engine.train --data_root data --cpu_augment --pin_memory
-```
-
-`persistent_workers=True` in the dataloaders is optional but can reduce worker
-startup time for repeated epochs.
-
-Training logs and checkpoints are stored under `runs/motor_fold<fold>`.
-Monitor progress with:
+학습 로그와 체크포인트는 `runs/motor_fold<fold>` 디렉터리에 저장됩니다. 진행 상황은 다음과 같이 확인합니다:
 
 ```bash
 tensorboard --logdir runs
 ```
 
-### Quick sanity check
+### 빠른 테스트
 
-Run a short training cycle to gauge model quality:
+모델을 간단히 확인하기 위해 작은 규모의 학습을 실행할 수 있습니다. `--max_steps`, `--limit_val_batches`, `--val_check_interval` 인자를 조정하여 학습과 검증 횟수를 줄일 수 있습니다.
 
 ```bash
 python -m motor_det.engine.train \
-  --data_root D:\\project\\Kaggle\\BYU\\byu-motor\\data \
-  --batch_size 1 --max_steps 1500 --limit_val_batches 0.1
+  --data_root D:\project\Kaggle\BYU\byu-motor\data \
+  --batch_size 1 \
+  --max_steps 1500 \
+  --limit_val_batches 0.1 \
+  --val_check_interval 1500
 ```
 
-This trains for roughly 1500 iterations and evaluates on 10% of the validation
-set.
+## 추론
 
-## Inference
-
-After training, generate predictions with:
+학습 완료 후 다음 명령으로 예측 결과를 생성할 수 있습니다:
 
 ```bash
 python -m motor_det.engine.infer \
@@ -92,41 +79,5 @@ python -m motor_det.engine.infer \
   --out_csv predictions.csv
 ```
 
-`--batch` and `--num_workers` control throughput. The script automatically
-uses the GPU when available.
-
-Quick test scripts such as `quick_train_val.py` and
-`motor_det/tests/test_quick_train.py` reproduce small-scale experiments.
-
-
-Enabling `--pin_memory` is useful when using CPU-based augmentation. When
-CUDA augmentation is active (the default), set `--cpu_augment` before enabling
-`--pin_memory` to avoid ``RuntimeError: cannot pin 'cuda' memory`` from the
-DataLoader.
-
-## Inference
-
-Use the convenience function `run_inference` to load a checkpoint and
-predict motor centers for a directory of tomograms.
-
-```python
-from motor_det.engine.infer import run_inference, InferConfig
-
-run_inference(
-    "weights/best.ckpt",
-    data_root="data",
-    out_csv="preds.csv",
-    cfg=InferConfig(),  # optional configuration overrides
-)
-```
-
-Alternatively the same defaults are available via the CLI:
-
-```bash
-python -m motor_det.engine.infer \
-    --weights weights/best.ckpt \
-    --data_root data \
-    --out_csv preds.csv
-```
-
+`--batch`와 `--num_workers` 값으로 처리 속도를 조절할 수 있으며 GPU가 있으면 자동으로 사용됩니다.
 
