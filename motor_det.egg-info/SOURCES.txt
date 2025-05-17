@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+motor_det/__init__.py
+motor_det/config.py
+motor_det.egg-info/PKG-INFO
+motor_det.egg-info/SOURCES.txt
+motor_det.egg-info/dependency_links.txt
+motor_det.egg-info/requires.txt
+motor_det.egg-info/top_level.txt

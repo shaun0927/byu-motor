@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: motor_det
+Version: 0.0.1
+Summary: BYU motor detection pipeline
+Author: Your Name
+Requires-Dist: numpy
+Requires-Dist: torch
+Requires-Dist: lightning
+Requires-Dist: monai
+Requires-Dist: pandas
+Requires-Dist: zarr

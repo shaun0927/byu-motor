@@ -1,0 +1,4 @@
+lr: 0.0002
+total_steps: 1000
+warmup_steps: 500
+weight_decay: 0.0001

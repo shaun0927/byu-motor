@@ -1,0 +1,43 @@
+# environment.yml  (Windows / RTX 40xx / CUDA 12.x 드라이버용)
+name: byu-motor
+channels:
+  - pytorch
+  - nvidia        # pytorch-cuda 패키지
+  - conda-forge
+  - defaults
+dependencies:
+  # ─── Python ───
+  - python=3.10
+  - pip
+
+  # ─── PyTorch + CUDA 12.1 런타임 ───
+  - pytorch=2.2.*          # ↙ 두 패키지가 세트
+  - torchvision=0.17.*
+  - torchaudio=2.2.*
+  - pytorch-cuda=12.1      # <─ 드라이버 12.7 과 호환
+
+  # ─── CV / 3-D 라이브러리 ───
+  - monai=1.4.0
+  - timm                  # 최신 호환 버전 자동
+  - opencv                # 윈도우엔 4.9.x 가 설치됨
+  - albumentations
+  - scikit-image
+  - scipy
+  - zarr
+  - numpy
+  - pandas
+  - tqdm
+  - mrcfile
+
+  # ─── Notebook 위젯 ───
+  - ipywidgets          # <─ 추가 (필수)
+  #   (JupyterLab ≥3 에선 자동 활성화, classic notebook 에선 nbextension 필요)
+  
+  # ─── 실험 관리 - 선택 사항 ───
+  - optuna
+  - neptune
+  - boto3
+
+  # ─── pip 전용 ───
+  - pip:
+      - kaggle

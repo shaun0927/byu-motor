@@ -1,0 +1,42 @@
+# --- 데이터 -------------------------------------------------
+*.zarr/
+*.zarr
+*.npy
+*.npz
+*.parquet
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.mmap
+*.dat
+*.jpg
+
+# --- 실험 결과 ---------------------------------------------
+logs/
+wandb/
+tensorboard/
+outputs/
+checkpoints/
+predictions/
+submissions/
+*.log
+*.csv
+
+# --- 파이썬/빌드 캐시 ---------------------------------------
+__pycache__/
+*.py[cod]
+*.so
+
+# --- IDE & OS ----------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- 가상환경 & 시크릿 --------------------------------------
+venv/
+.env
+*.env
+*.secret
+*.token
