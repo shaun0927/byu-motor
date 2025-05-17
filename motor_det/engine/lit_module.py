@@ -69,11 +69,13 @@ class LitMotorDet(L.LightningModule):
         self._val_outputs: list[dict[str, torch.Tensor]] = []
 
     def validation_step(self, batch, batch_idx):
+        # 1) 기본 손실 및 로그
         loss = self._shared_step(batch, "val")
 
-        preds   = self(batch["image"])
-        logits  = preds["cls"]
-        offsets = preds["offset"]
+        # 2) 예측 → NMS
+        preds    = self(batch["image"])
+        logits   = preds["cls"]
+        offsets  = preds["offset"]
 
         centers_pred = decode_with_nms(
             logits,
@@ -86,41 +88,60 @@ class LitMotorDet(L.LightningModule):
             switch_thr=self.hparams.nms_switch_thr,
         )[0]
 
-        spacing = batch["spacing_Å_per_voxel"][0]
-        centers_pred = centers_pred * float(spacing)
+        # 3) voxel → Å 변환
+        spacing = float(batch["spacing_Å_per_voxel"][0])
+        centers_pred = centers_pred * spacing
 
+        # 4) F2 및 세부 지표
         gt_centers = batch["centers_Å"][0]
         f2, prec, rec, tp, fp, fn = fbeta_score(
             centers_pred, gt_centers, beta=2, dist_thr=1000.0
         )
 
-        self._val_outputs.append({"tp": tp, "fp": fp, "fn": fn})
+        # 5) int → Tensor 캐스팅 후 저장
+        tp_t = torch.tensor(tp, device=self.device)
+        fp_t = torch.tensor(fp, device=self.device)
+        fn_t = torch.tensor(fn, device=self.device)
+        self._val_outputs.append({"tp": tp_t, "fp": fp_t, "fn": fn_t})
 
-        return {"tp": tp, "fp": fp, "fn": fn}
+        # (선택) 스텝 단위 로그
+        self.log_dict(
+            {"val/f2_step": f2, "val/prec_step": prec, "val/rec_step": rec},
+            on_step=True, on_epoch=False, prog_bar=False
+        )
 
-    def validation_epoch_end(self, outputs):
+        return {"tp": tp_t, "fp": fp_t, "fn": fn_t}
+
+    # ------------------------------------------------ #
+    def on_validation_epoch_end(self):      #반드시 함수 이름 on_validation_epoch_end(self)이어야 함
+        # 0) 빈 리스트면 바로 종료
         if not self._val_outputs:
             return
+
         device = self.device
         tp = torch.stack([o["tp"] for o in self._val_outputs]).sum().to(device)
         fp = torch.stack([o["fp"] for o in self._val_outputs]).sum().to(device)
         fn = torch.stack([o["fn"] for o in self._val_outputs]).sum().to(device)
+
         prec = tp / (tp + fp + 1e-9)
-        rec = tp / (tp + fn + 1e-9)
+        rec  = tp / (tp + fn + 1e-9)
         beta2 = 4.0
         f2 = (1 + beta2) * prec * rec / (beta2 * prec + rec + 1e-9)
-        self.log_dict({
-            "val/f2": f2,
-            "val/prec": prec,
-        # Lightning 2.x no longer uses ``validation_epoch_end``. Metrics are
-        # logged directly within ``validation_step`` above, so there is no need
-        # to return them for aggregation.
-        return None
-            "val/rec": rec,
-            "val/tp": tp,
-            "val/fp": fp,
-            "val/fn": fn,
-        }, prog_bar=True)
+
+        self.log_dict(
+            {
+                "val/f2":   f2,
+                "val/prec": prec,
+                "val/rec":  rec,
+                "val/tp":   tp,
+                "val/fp":   fp,
+                "val/fn":   fn,
+            },
+            prog_bar=True
+        )
+
+        # → Lightning 2.x 에서는 반환값이 필요 없으므로 그냥 종료
+        self._val_outputs.clear()   # 다음 epoch 대비 초기화
 
     # ------------------------------------------------ #
     def configure_optimizers(self):
