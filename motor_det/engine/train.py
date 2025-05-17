@@ -27,6 +27,8 @@ def parse_args():
     p.add_argument("--config", type=str, default=None, help="Training config file")
     p.add_argument("--data_root", type=str, required=True)
     p.add_argument("--batch_size", type=int, default=2)
+    p.add_argument("--num_workers", type=int, default=4, help="DataLoader worker processes")
+    p.add_argument("--persistent_workers", action="store_true", help="Reuse workers across epochs")
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--num_workers", type=int, default=4, help="Number of DataLoader workers")
     p.add_argument("--persistent_workers", action="store_true", help="Keep DataLoader workers alive between epochs")
@@ -129,6 +131,8 @@ def main() -> None:
 
     cfg.data_root = args.data_root
     cfg.batch_size = args.batch_size
+    cfg.num_workers = args.num_workers
+    cfg.persistent_workers = args.persistent_workers
     cfg.epochs = args.epochs
     cfg.num_workers = args.num_workers
     cfg.persistent_workers = args.persistent_workers

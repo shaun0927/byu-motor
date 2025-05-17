@@ -8,12 +8,15 @@ BYU Motor 데이터셋을 이용해 Bacteria Flagellar 모터의 존재 유무�
 `environment.yml` 파일을 사용해 conda 환경을 구성할 수 있습니다:
 
 
+
 ```bash
 conda env create -f environment.yml
 conda activate byu-motor
 ```
 
+
 또는 `pyproject.toml`을 이용해 바로 설치할 수도 있습니다:
+
 
 ```bash
 pip install -e .
@@ -22,7 +25,6 @@ pip install -e .
 ## 데이터 준비
 
 Kaggle CLI를 사용하여 BYU Motor 데이터셋을 내려받은 뒤 `data/` 폴더 아래에 배치합니다. 디렉터리 구조 예시는 다음과 같습니다:
-
 
 ```
 <DATA_ROOT>/
@@ -47,12 +49,14 @@ Kaggle CLI를 사용하여 BYU Motor 데이터셋을 내려받은 뒤 `data/` �
 전체 학습을 실행하려면 다음과 같이 명령을 입력합니다:
 
 
+
 ```bash
 python -m motor_det.engine.train \
   --data_root D:\project\Kaggle\BYU\byu-motor\data \
   --batch_size 2 --epochs 10
 
 ```
+
 
 검증 단계에서 사용할 NMS 방식은 `nms_algorithm` 옵션으로 결정하며 기본값인 `vectorized` 모드는 탐지 개수가 `--nms_switch_thr`를 넘으면 자동으로 `greedy`로 전환됩니다.
 
@@ -69,26 +73,10 @@ python -m motor_det.engine.train \
 tensorboard --logdir runs
 ```
 
-
-### 간단한 품질 확인
-
-짧은 학습으로 모델 성능을 빠르게 점검할 수 있습니다.
-
-```bash
-python -m motor_det.engine.train \
-  --data_root D:\project\Kaggle\BYU\byu-motor\data \
-  --batch_size 1 \
-  --max_steps 1500 \
-  --limit_val_batches 0.1 \
-  --val_check_interval 1500
-```
-
-`--max_steps`, `--limit_val_batches`, `--val_check_interval` 값을 조절해 짧은 실험을 수행할 수 있습니다. 검증 속도가 느리다면 `valid_use_gpu_augment=False` 로 설정하여 GPU 증강을 끄는 것이 도움이 됩니다.
-
 ## 추론
 
 학습 후 예측은 다음과 같이 생성합니다.
-=======
+
 ### 간단한 검증 실행
 
 모델 동작을 빠르게 확인하려면 짧은 학습을 수행할 수 있습니다. `--max_steps`, `--limit_val_batches`, `--val_check_interval` 값은 필요에 따라 조절하세요:
@@ -112,13 +100,13 @@ python -m motor_det.engine.train \
 학습 후에는 다음과 같이 예측을 생성할 수 있습니다:
 
 
+
 ```bash
 python -m motor_det.engine.infer \
   --weights runs/motor_fold0/best.ckpt \
   --data_root data \
   --out_csv predictions.csv
 ```
-
 
 `--batch`와 `--num_workers` 인자로 추론 속도를 조절할 수 있으며, 가능한 경우 GPU가 자동으로 사용됩니다.
 
@@ -163,3 +151,4 @@ python -m motor_det.engine.infer \
     --data_root data \
     --out_csv preds.csv
 ```
+
