@@ -47,6 +47,12 @@ def parse_args():
     p.add_argument("--max_steps", type=int, default=None, help="Maximum training steps")
     p.add_argument("--limit_val_batches", type=float, default=1.0, help="Fraction of validation batches to run")
     p.add_argument(
+        "--val_check_interval",
+        type=float,
+        default=1.0,
+        help="Interval (in steps or fraction of an epoch) between validation runs",
+    )
+    p.add_argument(
         "--env_prefix",
         type=str,
         default="BYU_TRAIN_",
@@ -104,6 +110,7 @@ def train(cfg: TrainingConfig):
         precision="16-mixed",          # 사용할 AMP 정밀도
         log_every_n_steps=50,
         default_root_dir=Path("runs") / f"motor_fold{cfg.fold}",
+        val_check_interval=cfg.val_check_interval,
         limit_val_batches=cfg.limit_val_batches,
         callbacks=callbacks,
     )
@@ -145,6 +152,7 @@ def main() -> None:
     cfg.cutmix_prob = args.cutmix
     cfg.max_steps = args.max_steps
     cfg.limit_val_batches = args.limit_val_batches
+    cfg.val_check_interval = args.val_check_interval
 
     train(cfg)
 

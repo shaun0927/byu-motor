@@ -23,6 +23,7 @@ cfg = TrainingConfig(
     pin_memory=True,
     epochs=10,
     max_steps=1500,
+    val_check_interval=1500,
     limit_val_batches=0.1,
 )
 
