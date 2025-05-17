@@ -81,6 +81,8 @@ class TrainingConfig:
     gpus: int = 1
     nms_algorithm: str = "vectorized"
     nms_switch_thr: int = 1000
+    max_steps: int | None = None
+    limit_val_batches: float | int = 1.0
 
     @classmethod
     def load(cls, path: str | Path | None = None, *, env_prefix: str | None = "BYU_TRAIN_") -> "TrainingConfig":

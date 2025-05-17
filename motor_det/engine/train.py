@@ -44,6 +44,8 @@ def parse_args():
     p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
     p.add_argument("--mixup", type=float, default=0.0, help="MixUp probability")
     p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
+    p.add_argument("--max_steps", type=int, default=None, help="Maximum training steps")
+    p.add_argument("--limit_val_batches", type=float, default=1.0, help="Fraction of validation batches to run")
     p.add_argument(
         "--env_prefix",
         type=str,
@@ -75,10 +77,11 @@ def train(cfg: TrainingConfig):
     dm.setup()
 
     # -------- Model --------
+    total_steps = cfg.max_steps or len(dm.train_dataloader()) * cfg.epochs
     model = LitMotorDet(
         lr=cfg.lr,
         weight_decay=cfg.weight_decay,
-        total_steps=len(dm.train_dataloader()) * cfg.epochs,
+        total_steps=total_steps,
         nms_algorithm=cfg.nms_algorithm,
         nms_switch_thr=cfg.nms_switch_thr,
     )
@@ -95,11 +98,13 @@ def train(cfg: TrainingConfig):
 
     trainer = L.Trainer(
         max_epochs=cfg.epochs,
+        max_steps=cfg.max_steps,
         accelerator="gpu" if cfg.gpus else "cpu",
         devices=cfg.gpus if cfg.gpus else 1,
         precision="16-mixed",          # 사용할 AMP 정밀도
         log_every_n_steps=50,
         default_root_dir=Path("runs") / f"motor_fold{cfg.fold}",
+        limit_val_batches=cfg.limit_val_batches,
         callbacks=callbacks,
     )
 
@@ -138,6 +143,8 @@ def main() -> None:
     cfg.use_gpu_augment = not args.cpu_augment
     cfg.mixup_prob = args.mixup
     cfg.cutmix_prob = args.cutmix
+    cfg.max_steps = args.max_steps
+    cfg.limit_val_batches = args.limit_val_batches
 
     train(cfg)
 

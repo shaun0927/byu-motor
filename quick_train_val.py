@@ -22,6 +22,8 @@ cfg = TrainingConfig(
     valid_use_gpu_augment=False,
     pin_memory=True,
     epochs=10,
+    max_steps=1500,
+    limit_val_batches=0.1,
 )
 
 start = time.time()
