@@ -25,10 +25,11 @@ class MotorTrainDataset(Dataset):
     BYU Motor – 학습용 랜덤 Crop + Flip 증강 (Lazy Zarr I/O 버전)
 
     반환 dict:
-      image     : FloatTensor [1, D, H, W]
-      cls       : FloatTensor [1, D/2, H/2, W/2]    ← 이미 채널축 포함
-      offset    : FloatTensor [3, D/2, H/2, W/2]
-      centers_Å : FloatTensor [K, 3]  (가변 길이)
+      image               : FloatTensor [1, D, H, W]
+      cls                 : FloatTensor [1, D/2, H/2, W/2]    ← 이미 채널축 포함
+      offset              : FloatTensor [3, D/2, H/2, W/2]
+      centers_Å           : FloatTensor [K, 3]  (가변 길이)
+      spacing_Å_per_voxel : float
     """
 
     def __init__(
@@ -137,6 +138,7 @@ class MotorTrainDataset(Dataset):
             "cls": cls_map_t,
             "offset": off_map_t,
             "centers_Å": centers_A,
+            "spacing_Å_per_voxel": self.spacing,
         }
 
 
@@ -240,6 +242,7 @@ class MotorInstanceCropDataset(Dataset):
             "cls": cls_map_t,
             "offset": off_map_t,
             "centers_Å": centers_A,
+            "spacing_Å_per_voxel": self.spacing,
         }
     
 class PositiveOnlyCropDataset(MotorInstanceCropDataset):
@@ -293,6 +296,7 @@ class BackgroundRandomCropDataset(Dataset):
             "cls": cls_map_t,
             "offset": off_map_t,
             "centers_Å": torch.empty((0, 3), dtype=torch.float32),
+            "spacing_Å_per_voxel": self.spacing,
         }
 
 class MotorPositiveCropDataset(Dataset):
@@ -373,4 +377,5 @@ class MotorPositiveCropDataset(Dataset):
             "cls": cls_map_t,
             "offset": off_map_t,
             "centers_Å": centers_A,
+            "spacing_Å_per_voxel": self.spacing,
         }
