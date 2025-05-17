@@ -47,7 +47,9 @@ class LitMotorDet(L.LightningModule):
         preds = self(batch["image"])
         loss, logs = motor_detection_loss(preds, batch)
         logs = {f"{stage}/{k}": v for k, v in logs.items()}
-        self.log_dict(logs, prog_bar=True, on_step=True, on_epoch=True)
+        batch_size = batch["image"].size(0)
+        self.log_dict(logs, prog_bar=True, on_step=True, on_epoch=True,
+                      batch_size=batch_size)
         return loss
 
     def training_step(self, batch, _):
