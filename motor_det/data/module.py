@@ -4,6 +4,7 @@ import numpy as np
 from torch.utils.data import DataLoader, ConcatDataset
 from pathlib import Path
 from motor_det.data.dataset import MotorTrainDataset
+from motor_det.utils.collate import collate_with_centers
 from motor_det.utils.voxel import voxel_spacing_map, read_train_centers
 from sklearn.model_selection import StratifiedGroupKFold
 
@@ -90,6 +91,7 @@ class MotorDataModule(L.LightningDataModule):
             pin_memory=True,
             persistent_workers=self.persistent_workers,
             drop_last=False,
+            collate_fn=collate_with_centers,
         )
 
     def val_dataloader(self):
@@ -101,4 +103,5 @@ class MotorDataModule(L.LightningDataModule):
             pin_memory=True,
             persistent_workers=self.persistent_workers,
             drop_last=False,
+            collate_fn=collate_with_centers,
         )
