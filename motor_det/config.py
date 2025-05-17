@@ -1,10 +1,4 @@
 
-from dataclasses import dataclass
-from motor_det.utils.voxel import DEFAULT_TEST_SPACING
-
-@dataclass
-class InferConfig:
-    """Configuration defaults for inference."""
 from __future__ import annotations
 
 import ast
