@@ -64,10 +64,11 @@ class MotorDataModule(L.LightningDataModule):
             if not zarr_path.exists():
                 continue
             # 이 tomo 에 해당하는 GT 좌표 (X, Y, Z 순으로 정렬)
-            centers = centers_df.loc[
-                centers_df["tomo_id"] == tid,
-                ["Motor axis 2", "Motor axis 1", "Motor axis 0"]
-            ].values.astype(np.float32)
+            sub_df = centers_df[centers_df["tomo_id"] == tid]
+            # `Motor axis 0` 이 음수이면 해당 tomogram 에 motor 가 없음
+            sub_df = sub_df[sub_df["Motor axis 0"] >= 0]
+            centers = sub_df[["Motor axis 2", "Motor axis 1", "Motor axis 0"]]
+            centers = centers.values.astype(np.float32)
             vx = spacing_map.get(tid, 15.0)
             datasets.append(MotorTrainDataset(zarr_path, centers, vx))
 
