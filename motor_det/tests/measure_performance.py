@@ -38,7 +38,7 @@ def evaluate(weights: Path, data_root: Path, fold: int = 0) -> dict[str, float]:
                 out["cls"],
                 out["offset"],
                 stride=2,
-                prob_thr=0.6,
+                prob_thr=0.02,
                 sigma=60.0,
                 iou_thr=0.25,
             )[0]
