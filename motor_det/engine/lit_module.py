@@ -5,10 +5,9 @@ import lightning as L
 import torch
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from torch import nn, Tensor
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from motor_det.model.net import MotorDetNet
-from motor_det.loss.losses import motor_detection_loss, task_aligned_detection_loss
+from motor_det.loss.losses import task_aligned_detection_loss
 from motor_det.optim.cosine_with_warmup import WarmupCosineScheduler
 from motor_det.postprocess.decoder import decode_multiscale_with_nms
 from motor_det.models.task_aligned_assigner import TaskAlignedAssigner
