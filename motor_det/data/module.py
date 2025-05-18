@@ -8,7 +8,11 @@ import torch
 from torch.utils.data import DataLoader, ConcatDataset
 from sklearn.model_selection import StratifiedGroupKFold
 
-from motor_det.data.detection import InstanceCropDataset
+from motor_det.data.detection import (
+    InstanceCropDataset,
+    RandomCropDataset,
+    SlidingWindowDataset,
+)
 from motor_det.utils.collate import collate_with_centers
 from motor_det.utils.voxel import (
     voxel_spacing_map,
@@ -29,8 +33,10 @@ class MotorDataModule(L.LightningDataModule):
         batch_size: int = 2,
         num_workers: int = 12,
         persistent_workers: bool = True,
-        positive_only: bool = False,                 # ← 기본 False
-        num_crops_per_tomo: int = 256,               # ← 새 인자
+        positive_only: bool = False,
+        train_num_instance_crops: int = 128,
+        train_num_random_crops: int = 128,
+        train_include_sliding_dataset: bool = False,
         train_crop_size: tuple[int, int, int] = (96, 128, 128),
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
         pin_memory: bool = False,
@@ -54,7 +60,9 @@ class MotorDataModule(L.LightningDataModule):
 
         # dataset 파라미터
         self.positive_only = bool(positive_only)
-        self.num_crops_per_tomo = int(num_crops_per_tomo)
+        self.train_num_instance_crops = int(train_num_instance_crops)
+        self.train_num_random_crops = int(train_num_random_crops)
+        self.train_include_sliding_dataset = bool(train_include_sliding_dataset)
         self.train_crop_size = train_crop_size
         self.valid_crop_size = valid_crop_size
         self.val_num_crops = int(val_num_crops)
@@ -109,17 +117,52 @@ class MotorDataModule(L.LightningDataModule):
             if self.positive_only and len(centers) == 0:
                 continue
 
-            ds = InstanceCropDataset(
-                zarr_path,
-                centers,
-                vx,
-                crop_size=crop_size,
-                num_crops=self.num_crops_per_tomo if training else self.val_num_crops,
-                negative_ratio=0.0 if self.positive_only else 0.2,   # ← 핵심!
-                use_gpu=use_gpu,
-                mixup_prob=self.mixup_prob if training else 0.0,
-                cutmix_prob=self.cutmix_prob if training else 0.0,
-            )
+            if training:
+                sub_datasets = [
+                    InstanceCropDataset(
+                        zarr_path,
+                        centers,
+                        vx,
+                        crop_size=self.train_crop_size,
+                        num_crops=self.train_num_instance_crops,
+                        negative_ratio=0.0 if self.positive_only else 0.2,
+                        use_gpu=use_gpu,
+                        mixup_prob=self.mixup_prob,
+                        cutmix_prob=self.cutmix_prob,
+                    ),
+                    RandomCropDataset(
+                        zarr_path,
+                        centers,
+                        vx,
+                        crop_size=self.train_crop_size,
+                        num_crops=self.train_num_random_crops,
+                        use_gpu=use_gpu,
+                        mixup_prob=self.mixup_prob,
+                        cutmix_prob=self.cutmix_prob,
+                    ),
+                ]
+                if self.train_include_sliding_dataset:
+                    sub_datasets.append(
+                        SlidingWindowDataset(
+                            zarr_path,
+                            window=self.valid_crop_size,
+                            stride=tuple(s // 2 for s in self.valid_crop_size),
+                            voxel_spacing=vx,
+                        )
+                    )
+                ds = ConcatDataset(sub_datasets)
+            else:
+                ds = InstanceCropDataset(
+                    zarr_path,
+                    centers,
+                    vx,
+                    crop_size=crop_size,
+                    num_crops=self.val_num_crops,
+                    negative_ratio=0.0 if self.positive_only else 0.2,
+                    use_gpu=use_gpu,
+                    mixup_prob=0.0,
+                    cutmix_prob=0.0,
+                )
             datasets.append(ds)
 
         if not datasets:

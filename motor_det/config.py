@@ -65,6 +65,9 @@ class TrainingConfig:
     num_workers: int = 12
     persistent_workers: bool = True
     positive_only: bool = True
+    train_num_instance_crops: int = 128
+    train_num_random_crops: int = 128
+    train_include_sliding_dataset: bool = False
     train_crop_size: tuple[int, int, int] = (96, 128, 128)
     valid_crop_size: tuple[int, int, int] = (192, 128, 128)
     pin_memory: bool = False
