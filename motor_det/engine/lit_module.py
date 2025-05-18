@@ -3,6 +3,7 @@ from typing import Dict, Tuple
 
 import lightning as L
 import torch
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from torch import nn, Tensor
 
 from motor_det.model.net import MotorDetNet
@@ -60,6 +61,14 @@ class LitMotorDet(L.LightningModule):
         batch_size = batch["image"].size(0)
         self.log_dict(logs, prog_bar=True, on_step=True, on_epoch=True,
                       batch_size=batch_size)
+
+        # Print metrics to the console for real-time monitoring
+        msg = (
+            f"[{stage.upper()}] step {self.global_step:>6}: "
+            + ", ".join(f"{k.split('/')[-1]}={float(v):.4f}" for k, v in logs.items())
+        )
+        rank_zero_info(msg)
+
         return loss
 
     def training_step(self, batch, _):
@@ -112,6 +121,11 @@ class LitMotorDet(L.LightningModule):
             prog_bar=True,
         )
 
+        # Print step metrics to the console
+        rank_zero_info(
+            f"[VAL] step {self.global_step:>6}: f2={f2:.4f}, tp={tp}, fp={fp}, fn={fn}"
+        )
+
         return {"tp": tp_t, "fp": fp_t, "fn": fn_t}
 
     # ------------------------------------------------ #
@@ -142,6 +156,11 @@ class LitMotorDet(L.LightningModule):
             prog_bar=True,
             on_step=False,
             on_epoch=True,
+        )
+
+        # Print aggregated validation metrics
+        rank_zero_info(
+            f"[VAL] step {self.global_step:>6}: f2={f2:.4f}, tp={int(tp)}, fp={int(fp)}, fn={int(fn)}"
         )
 
         # → Lightning 2.x 에서는 반환값이 필요 없으므로 그냥 종료
