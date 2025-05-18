@@ -29,6 +29,7 @@ class InstanceCropDataset(DetectionDataset, PatchCacheMixin):
         num_crops: int | None = 64,
         negative_ratio: float = 0.2,
         cache_size: int = 128,
+        preload_volume: bool = False,
         *,
         use_gpu: bool = True,
         mixup_prob: float = 0.0,
@@ -46,6 +47,8 @@ class InstanceCropDataset(DetectionDataset, PatchCacheMixin):
         )
         PatchCacheMixin.__init__(self, cache_size=cache_size)
         self.vol = zarr.open(zarr_path, mode="r")
+        if preload_volume:
+            self.vol = np.asarray(self.vol)
         self.centers = center_xyz.astype(np.float32) / voxel_spacing
         self.spacing = float(voxel_spacing)
         self.crop_size = crop_size

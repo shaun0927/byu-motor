@@ -56,8 +56,11 @@ class SlidingWindowDataset(PatchCacheMixin, Dataset, ObjectDetectionMixin):
         cache_size: int = 128,
         num_tiles: Tuple[int, int, int] | None = None,
         voxel_spacing: float = 1.0,
+        preload_volume: bool = False,
     ) -> None:
         self.store = zarr.open(zarr_path, mode="r")
+        if preload_volume:
+            self.store = np.asarray(self.store).astype(dtype)
         self.win = window
         self.window = window
         self.stride = stride

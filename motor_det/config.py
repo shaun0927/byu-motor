@@ -72,6 +72,7 @@ class TrainingConfig:
     valid_crop_size: tuple[int, int, int] = (192, 128, 128)
     pin_memory: bool = False
     prefetch_factor: int | None = 2
+    preload_volumes: bool = False
     use_gpu_augment: bool = True
     valid_use_gpu_augment: bool | None = False
     mixup_prob: float = 0.0

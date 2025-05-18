@@ -38,6 +38,7 @@ def train(cfg: TrainingConfig) -> L.Trainer:
         valid_crop_size=cfg.valid_crop_size,
         pin_memory=cfg.pin_memory,
         prefetch_factor=cfg.prefetch_factor,
+        preload_volumes=cfg.preload_volumes,
         use_gpu_augment=cfg.use_gpu_augment,
         valid_use_gpu_augment=cfg.valid_use_gpu_augment,
         mixup_prob=cfg.mixup_prob,
@@ -96,6 +97,7 @@ def cli() -> argparse.Namespace:
     p.add_argument("--persistent_workers", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--pin_memory", action="store_true")
     p.add_argument("--prefetch_factor", type=int, default=2)
+    p.add_argument("--preload_volumes", action=argparse.BooleanOptionalAction, default=False)
 
     p.add_argument(
         "--positive_only",
@@ -156,6 +158,7 @@ def main() -> None:
         valid_crop_size=(args.valid_depth, args.valid_spatial, args.valid_spatial),
         pin_memory=args.pin_memory,
         prefetch_factor=args.prefetch_factor,
+        preload_volumes=args.preload_volumes,
         use_gpu_augment=not args.cpu_augment,
         valid_use_gpu_augment=False,
         mixup_prob=args.mixup,
