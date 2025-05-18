@@ -26,6 +26,7 @@ class RandomCropDataset(DetectionDataset, PatchCacheMixin):
         crop_size: Tuple[int, int, int] = (96, 128, 128),
         num_crops: int = 64,
         cache_size: int = 128,
+        preload_volume: bool = False,
         *,
         use_gpu: bool = True,
         mixup_prob: float = 0.0,
@@ -43,6 +44,8 @@ class RandomCropDataset(DetectionDataset, PatchCacheMixin):
         )
         PatchCacheMixin.__init__(self, cache_size=cache_size)
         self.vol = zarr.open(zarr_path, mode="r")
+        if preload_volume:
+            self.vol = np.asarray(self.vol)
         self.centers = center_xyz.astype(np.float32) / voxel_spacing
         self.spacing = float(voxel_spacing)
         self.crop_size = crop_size

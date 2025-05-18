@@ -41,6 +41,7 @@ class MotorDataModule(L.LightningDataModule):
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
         pin_memory: bool = False,
         prefetch_factor: int | None = 2,
+        preload_volumes: bool = False,
         use_gpu_augment: bool = True,
         valid_use_gpu_augment: bool | None = None,
         mixup_prob: float = 0.0,
@@ -59,6 +60,7 @@ class MotorDataModule(L.LightningDataModule):
         self.persistent_workers = persistent_workers
         self.pin_memory = pin_memory
         self.prefetch_factor = prefetch_factor
+        self.preload_volumes = preload_volumes
 
         # dataset 파라미터
         self.positive_only = bool(positive_only)
@@ -130,6 +132,7 @@ class MotorDataModule(L.LightningDataModule):
                         crop_size=self.train_crop_size,
                         num_crops=self.train_num_instance_crops,
                         negative_ratio=0.0 if self.positive_only else 0.2,
+                        preload_volume=self.preload_volumes,
                         use_gpu=use_gpu,
                         mixup_prob=self.mixup_prob,
                         cutmix_prob=self.cutmix_prob,
@@ -145,6 +148,7 @@ class MotorDataModule(L.LightningDataModule):
                             vx,
                             crop_size=self.train_crop_size,
                             num_crops=self.train_num_random_crops,
+                            preload_volume=self.preload_volumes,
                             use_gpu=use_gpu,
                             mixup_prob=self.mixup_prob,
                             cutmix_prob=self.cutmix_prob,
@@ -159,6 +163,7 @@ class MotorDataModule(L.LightningDataModule):
                             window=self.valid_crop_size,
                             stride=tuple(s // 2 for s in self.valid_crop_size),
                             voxel_spacing=vx,
+                            preload_volume=self.preload_volumes,
                         )
                     )
                 ds = ConcatDataset(sub_datasets)
@@ -170,6 +175,7 @@ class MotorDataModule(L.LightningDataModule):
                     crop_size=crop_size,
                     num_crops=self.val_num_crops,
                     negative_ratio=0.0 if self.positive_only else 0.2,
+                    preload_volume=self.preload_volumes,
                     use_gpu=use_gpu,
                     mixup_prob=0.0,
                     cutmix_prob=0.0,
