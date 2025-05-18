@@ -104,7 +104,7 @@ def cli() -> argparse.Namespace:
         help="only sample patches containing motors",
     )
     p.add_argument("--train_num_instance_crops", type=int, default=128)
-    p.add_argument("--train_num_random_crops", type=int, default=128)
+    p.add_argument("--train_num_random_crops", type=int, default=0)
     p.add_argument("--train_include_sliding_dataset", action=argparse.BooleanOptionalAction, default=False)
     p.add_argument("--cpu_augment", action="store_true")
     p.add_argument("--mixup", type=float, default=0.0)
