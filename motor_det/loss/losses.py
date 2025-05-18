@@ -13,9 +13,25 @@ Model output dict
 from __future__ import annotations
 from typing import Dict, Tuple
 
+from motor_det.postprocess.decoder import anchors_for_offsets_feature_map
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+
+
+def keypoint_similarity(p1: Tensor, p2: Tensor, sigma: float) -> Tensor:
+    """Gaussian keypoint similarity used as IoU approximation."""
+    d2 = ((p1 - p2) ** 2).sum(dim=-1)
+    return torch.exp(-d2 / (2 * sigma * sigma))
+
+
+def varifocal_loss(pred_logits: Tensor, gt_score: Tensor, label: Tensor, *, alpha: float = 0.75, gamma: float = 2.0) -> Tensor:
+    """Varifocal loss as used in many anchor-free detectors."""
+    pred_score = pred_logits.sigmoid()
+    weight = alpha * pred_score.pow(gamma) * (1 - label) + gt_score * label
+    bce = F.binary_cross_entropy_with_logits(pred_logits, gt_score, reduction="none")
+    return (weight * bce).mean()
 
 
 def motor_detection_loss(
@@ -23,9 +39,11 @@ def motor_detection_loss(
     batch: Dict[str, Tensor],
     lambda_offset: float = 1.0,
     *,
+    focal_alpha: float = 0.75,
     focal_gamma: float = 2.0,
-    pos_weight_clip: float = 5.0,
+    pos_weight_clip: float = 5.0,  # kept for API compatibility
     pos_weight: Tensor | None = None,
+    sigma: float = 60.0,
 ) -> Tuple[Tensor, Dict[str, float]]:
     """
     Returns
@@ -46,49 +64,48 @@ def motor_detection_loss(
     gt_cls:   Tensor = batch["cls"]    # same shape
     gt_off:   Tensor = batch["offset"] # same shape
 
-    # ─── 2. Classification BCEWithLogits ──────────────────────────────
-    with torch.cuda.amp.autocast(enabled=False):        # <─ AMP off
-        if pos_weight is None:
-            pos = gt_cls.sum()
-            neg = gt_cls.numel() - pos
-            w = (neg / (pos + 1e-9)) if pos > 0 else 1.0
-            w = float(min(w, pos_weight_clip))
-            pos_weight = torch.tensor(w, device=pred_cls.device)
+    # build anchor grid to convert offsets → absolute centres
+    _, _, D, H, W = pred_cls.shape
+    anchors = anchors_for_offsets_feature_map((D, H, W), stride=2, device=pred_cls.device).unsqueeze(0)
+    pred_center = anchors + pred_off
+    gt_center = anchors + gt_off
 
-        bce_raw = F.binary_cross_entropy_with_logits(
-            pred_cls.float(),       # logits (32-bit)
-            gt_cls.float(),
-            weight=None,
-            pos_weight=pos_weight,
-            reduction="none",
-        )
+    # IoU-like similarity between predicted and GT centres
+    diff2 = (pred_center - gt_center).pow(2).sum(dim=1, keepdim=True)
+    iou_map = torch.exp(-diff2 / (2 * sigma * sigma))
 
-        if focal_gamma is not None and focal_gamma > 0:
-            prob = torch.sigmoid(pred_cls.float())
-            pt = prob * gt_cls + (1.0 - prob) * (1.0 - gt_cls)
-            bce_raw = bce_raw * ((1.0 - pt) ** focal_gamma)
+    # ─── 2. Classification: Varifocal ──────────────────────────────────
+    gt_score = iou_map * gt_cls
+    cls_loss = varifocal_loss(
+        pred_cls.float(),
+        gt_score.float(),
+        gt_cls.float(),
+        alpha=focal_alpha,
+        gamma=focal_gamma,
+    )
 
-        bce = bce_raw.mean()
-
-    # ─── 3. Offset L1 (positive 위치에서만) ──────────────────
-    pos_mask: Tensor = gt_cls.bool()                 # (B,1,D',H',W')
+    # ─── 3. Regression IoU + L1 (positive 위치에서만) ────────────
+    pos_mask: Tensor = gt_cls.bool()
     if pos_mask.any():
-        # expand mask to 3 channels
-        pos_mask_3 = pos_mask.expand_as(pred_off)    # same shape as offset
-        l1 = F.l1_loss(
-            pred_off[pos_mask_3].float(),
-            gt_off[pos_mask_3].float(),
+        pos_mask_3 = pos_mask.expand_as(pred_center)
+        iou_loss = (1 - iou_map[pos_mask]).mean()
+        l1 = F.smooth_l1_loss(
+            pred_center[pos_mask_3].float(),
+            gt_center[pos_mask_3].float(),
             reduction="mean",
         )
     else:
-        l1 = torch.tensor(0.0, device=pred_off.device)
+        iou_loss = torch.tensor(0.0, device=pred_cls.device)
+        l1 = torch.tensor(0.0, device=pred_cls.device)
+
+    reg_loss = iou_loss + l1
 
     # ─── 4. 총 손실 및 로그 ──────────────────────────────────
-    loss = bce + lambda_offset * l1
+    loss = cls_loss + lambda_offset * reg_loss
     logs = {
         "loss":       float(loss),
-        "loss_cls":   float(bce),
-        "loss_off":   float(l1),
+        "loss_cls":   float(cls_loss),
+        "loss_off":   float(reg_loss),
         "num_pos":    float(pos_mask.sum().item()),
     }
     return loss, logs
