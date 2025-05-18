@@ -1,7 +1,7 @@
 """
 motor_det.loss.losses
 =====================
-간결한 1-클래스 BYU 모터 탐지 손실 함수
+간결한 1-클래스 BYU 모터 탐지 손실 함수 (Focal + IoU)
 ------------------------------------
 Batch dict 필수 key
     "cls"    : (B,1,D',H',W')  0/1 binary GT heat-map
@@ -34,6 +34,16 @@ def varifocal_loss(pred_logits: Tensor, gt_score: Tensor, label: Tensor, *, alph
     return (weight * bce).mean()
 
 
+def focal_loss(pred_logits: Tensor, label: Tensor, *, alpha: float = 0.25, gamma: float = 2.0) -> Tensor:
+    """Standard binary focal loss."""
+    prob = pred_logits.sigmoid()
+    ce = F.binary_cross_entropy_with_logits(pred_logits, label, reduction="none")
+    p_t = prob * label + (1 - prob) * (1 - label)
+    alpha_factor = alpha * label + (1 - alpha) * (1 - label)
+    modulating = (1 - p_t).pow(gamma)
+    return (alpha_factor * modulating * ce).mean()
+
+
 def motor_detection_loss(
     pred: Dict[str, Tensor],
     batch: Dict[str, Tensor],
@@ -46,6 +56,9 @@ def motor_detection_loss(
     sigma: float = 60.0,
 ) -> Tuple[Tensor, Dict[str, float]]:
     """
+    Compute object detection loss using focal classification and IoU based
+    regression.
+
     Returns
     -------
     loss  : scalar tensor
@@ -74,11 +87,9 @@ def motor_detection_loss(
     diff2 = (pred_center - gt_center).pow(2).sum(dim=1, keepdim=True)
     iou_map = torch.exp(-diff2 / (2 * sigma * sigma))
 
-    # ─── 2. Classification: Varifocal ──────────────────────────────────
-    gt_score = iou_map * gt_cls
-    cls_loss = varifocal_loss(
+    # ─── 2. Classification: Focal ───────────────────────────────────────
+    cls_loss = focal_loss(
         pred_cls.float(),
-        gt_score.float(),
         gt_cls.float(),
         alpha=focal_alpha,
         gamma=focal_gamma,
