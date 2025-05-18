@@ -38,15 +38,16 @@ def gather_topk_anchors(
 
 
 def check_points_inside_bboxes(
+    anchor_points: Tensor,
+    gt_centers: Tensor,
+    gt_radius: Tensor,
+    eps: float = 0.05,
+) -> Tensor:
     """Return indicator if anchors fall inside the GT spheres.
 
     ``anchor_points`` may be 2‑D ``[N,3]`` or 3‑D ``[B,N,3]``.  When 2‑D, expand
     across the batch to match ``gt_centers``.
     """
-    if anchor_points.ndim == 2:
-        anchor_points = anchor_points.unsqueeze(0).expand(gt_centers.size(0), -1, -1)
-    anchor_points: Tensor, gt_centers: Tensor, gt_radius: Tensor, eps: float = 0.05
-) -> Tensor:
     if anchor_points.ndim == 2:
         anchor_points = anchor_points.unsqueeze(0).expand(gt_centers.size(0), -1, -1)
     iou = batch_pairwise_keypoints_iou(anchor_points, gt_centers, gt_radius)
@@ -96,7 +97,7 @@ class TaskAlignedAssigner(nn.Module):
             return assigned_labels, assigned_points, assigned_scores, assigned_sigmas
 
         ious = batch_pairwise_keypoints_iou(pred_centers, true_centers, true_sigmas)
-        pred_scores = torch.permute(pred_scores, [0, 2, 1])
+        pred_scores = pred_scores.permute(0, 2, 1)
         batch_ind = torch.arange(end=batch_size, dtype=true_labels.dtype, device=true_labels.device).unsqueeze(-1)
         gt_labels_ind = torch.stack([batch_ind.tile([1, num_max_boxes]), true_labels.squeeze(-1)], dim=-1)
         bbox_cls_scores = pred_scores[gt_labels_ind[..., 0], gt_labels_ind[..., 1]]
