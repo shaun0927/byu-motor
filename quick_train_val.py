@@ -23,6 +23,7 @@ cfg = TrainingConfig(
     valid_use_gpu_augment=False,
     pin_memory=True,
     prefetch_factor=2,
+    preload_volumes=True,
     epochs=10,
     max_steps=1500,
     val_check_interval=1500,

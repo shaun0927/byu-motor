@@ -5,7 +5,8 @@ Minimal BYU-Motor training runner
 python -m motor_det.engine.train ^
        --data_root D:\abs\path\data ^
        --batch_size 2 ^
-       --epochs 10
+       --epochs 10 ^
+       --preload_volumes
 """
 from __future__ import annotations
 import argparse
@@ -97,7 +98,7 @@ def cli() -> argparse.Namespace:
     p.add_argument("--persistent_workers", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--pin_memory", action="store_true")
     p.add_argument("--prefetch_factor", type=int, default=2)
-    p.add_argument("--preload_volumes", action=argparse.BooleanOptionalAction, default=False)
+    p.add_argument("--preload_volumes", action=argparse.BooleanOptionalAction, default=True)
 
     p.add_argument(
         "--positive_only",
