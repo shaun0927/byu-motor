@@ -22,6 +22,7 @@ from motor_det.utils.augment import (
 )
 
 from .mixin import _apply_flip_np, _apply_flip_torch, ObjectDetectionMixin
+from torch.utils.data import get_worker_info
 
 
 class DetectionDataset(Dataset, ObjectDetectionMixin):
@@ -50,7 +51,8 @@ class DetectionDataset(Dataset, ObjectDetectionMixin):
         centers,
         sample_fn: Callable[[], Tuple] | None = None,
     ):
-        if self.use_gpu:
+        use_gpu = self.use_gpu and get_worker_info() is None
+        if use_gpu:
             patch, cls_map, off_map, axes = random_flip3d_torch(patch, cls_map, off_map, return_axes=True)
             centers = _apply_flip_torch(centers, axes, self.crop_size)
             patch = random_erase3d_torch(patch)
@@ -63,7 +65,7 @@ class DetectionDataset(Dataset, ObjectDetectionMixin):
             for _ in range(self.copy_paste_limit):
                 if np.random.rand() < self.copy_paste_prob:
                     p2, c2, o2, _ = sample_fn()
-                    if self.use_gpu:
+                    if use_gpu:
                         patch, cls_map, off_map = copy_paste3d_torch(patch, cls_map, off_map, p2, c2, o2)
                     else:
                         patch, cls_map, off_map = copy_paste3d(patch, cls_map, off_map, p2, c2, o2)
@@ -72,18 +74,18 @@ class DetectionDataset(Dataset, ObjectDetectionMixin):
             r = np.random.rand()
             if r < self.mixup_prob:
                 p2, c2, o2, _ = sample_fn()
-                if self.use_gpu:
+                if use_gpu:
                     patch, cls_map, off_map = mixup3d_torch(patch, cls_map, off_map, p2, c2, o2)
                 else:
                     patch, cls_map, off_map = mixup3d(patch, cls_map, off_map, p2, c2, o2)
             elif r < self.mixup_prob + self.cutmix_prob:
                 p2, c2, o2, _ = sample_fn()
-                if self.use_gpu:
+                if use_gpu:
                     patch, cls_map, off_map = cutmix3d_torch(patch, cls_map, off_map, p2, c2, o2)
                 else:
                     patch, cls_map, off_map = cutmix3d(patch, cls_map, off_map, p2, c2, o2)
 
-        if self.use_gpu:
+        if use_gpu:
             patch = random_gaussian_noise_torch(patch)
         else:
             patch = random_gaussian_noise(patch)
