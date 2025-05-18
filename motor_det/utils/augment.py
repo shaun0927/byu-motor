@@ -27,6 +27,13 @@ def random_flip3d(
     -------
     Tuple of flipped arrays.  If ``return_axes`` is ``True`` a second tuple
     containing the flipped axes is appended.
+
+    Notes
+    -----
+    ``off_map`` stores offsets as ``(Δx, Δy, Δz)``.  The spatial axes of the
+    volume are ordered ``(z, y, x)``.  ``axis_map = {0: 2, 1: 1, 2: 0}``
+    converts between these so that flipping along depth (``z``) negates ``Δz``,
+    and so on.
     """
 
     if axes is None:
@@ -34,11 +41,17 @@ def random_flip3d(
     else:
         axes = tuple(int(a) for a in axes)
 
+    # Mapping from volume axis (z, y, x) to offset channel (x, y, z).
+    # ``off_map`` stores offsets in (Δx, Δy, Δz) order, whereas the spatial axes
+    # of ``volume`` follow (z, y, x).  ``axis_map`` converts between the two so
+    # that flipping depth negates Δz, etc.
+    axis_map = {0: 2, 1: 1, 2: 0}
+
     for ax in axes:
         volume = np.flip(volume, axis=ax)
         cls_map = np.flip(cls_map, axis=ax + 1)
         off_map = np.flip(off_map, axis=ax + 1)
-        off_map[ax] *= -1
+        off_map[axis_map[ax]] *= -1
 
     volume = volume.copy()
     cls_map = cls_map.copy()
@@ -137,18 +150,27 @@ def random_flip3d_torch(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | tuple[
     torch.Tensor, torch.Tensor, torch.Tensor, tuple[int, ...]
 ]:
-    """CUDA version of :func:`random_flip3d`."""
+    """CUDA version of :func:`random_flip3d`.
+
+    Notes
+    -----
+    ``off_map`` channels are ordered ``(Δx, Δy, Δz)`` while spatial axes follow
+    ``(z, y, x)``.  ``axis_map = {0: 2, 1: 1, 2: 0}`` ensures that flipping along
+    an axis negates the corresponding offset channel.
+    """
 
     if axes is None:
         axes = tuple(ax for ax in (0, 1, 2) if torch.rand(1, device=volume.device) < 0.5)
     else:
         axes = tuple(int(a) for a in axes)
 
+    axis_map = {0: 2, 1: 1, 2: 0}
+
     for ax in axes:
         volume = torch.flip(volume, dims=(ax,))
         cls_map = torch.flip(cls_map, dims=(ax + 1,))
         off_map = torch.flip(off_map, dims=(ax + 1,))
-        off_map[ax].neg_()
+        off_map[axis_map[ax]].neg_()
 
     volume = volume.contiguous()
     cls_map = cls_map.contiguous()

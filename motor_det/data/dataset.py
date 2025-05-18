@@ -25,22 +25,41 @@ from motor_det.utils.augment import (
 
 
 def _apply_flip_np(centers: np.ndarray, axes: tuple[int, ...], shape: tuple[int, int, int]) -> np.ndarray:
-    """Flip centre coordinates for NumPy arrays."""
+    """Flip centre coordinates for NumPy arrays.
+
+    Parameters
+    ----------
+    centers : ``(N, 3)`` array storing coordinates in ``(x, y, z)`` order
+    axes    : axes used to flip the volume in ``(z, y, x)`` order
+    shape   : shape of the volume in ``(D, H, W)`` order
+    """
     if centers.size == 0 or not axes:
         return centers
     out = centers.copy()
+    # Map flip axis from ``(z, y, x)`` to coordinate order ``(x, y, z)``.
+    axis_map = {0: 2, 1: 1, 2: 0}
     for ax in axes:
-        out[:, ax] = shape[ax] - 1 - out[:, ax]
+        coord_ax = axis_map[ax]
+        out[:, coord_ax] = shape[ax] - 1 - out[:, coord_ax]
     return out
 
 
 def _apply_flip_torch(centers: torch.Tensor, axes: tuple[int, ...], shape: tuple[int, int, int]) -> torch.Tensor:
-    """Flip centre coordinates for torch tensors."""
+    """Flip centre coordinates for torch tensors.
+
+    Parameters
+    ----------
+    centers : ``(N, 3)`` tensor in ``(x, y, z)`` order
+    axes    : axes used to flip the volume in ``(z, y, x)`` order
+    shape   : shape of the volume in ``(D, H, W)`` order
+    """
     if centers.numel() == 0 or not axes:
         return centers
     out = centers.clone()
+    axis_map = {0: 2, 1: 1, 2: 0}
     for ax in axes:
-        out[:, ax] = shape[ax] - 1 - out[:, ax]
+        coord_ax = axis_map[ax]
+        out[:, coord_ax] = shape[ax] - 1 - out[:, coord_ax]
     return out
 
 
