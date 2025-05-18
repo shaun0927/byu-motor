@@ -107,8 +107,8 @@ def infer_single_tomo(
                     dims = [ax + 2 for ax in axes]
                     p = torch.flip(p, dims=dims)
                 out = net(p)
-                logits = out["cls"]
-                offsets = out["offset"]
+                logits = out["logits"][0]
+                offsets = out["offsets"][0]
                 if axes:
                     logits = torch.flip(logits, dims=dims)
                     offsets = torch.flip(offsets, dims=dims)
@@ -198,7 +198,7 @@ def run_inference(
             net=net,
             window=(cfg.win_d, cfg.win_h, cfg.win_w),
             stride=(cfg.stride_d, cfg.stride_h, cfg.stride_w),
-            stride_head=cfg.stride_head,
+            stride_head=net.strides[0],
             spacing_Å=spacing,
             batch_size=cfg.batch,
             num_workers=cfg.num_workers,

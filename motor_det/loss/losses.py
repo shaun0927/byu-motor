@@ -109,3 +109,90 @@ def motor_detection_loss(
         "num_pos":    float(pos_mask.sum().item()),
     }
     return loss, logs
+
+
+def task_aligned_detection_loss(
+    logits_list: list[Tensor],
+    offsets_list: list[Tensor],
+    strides: list[int],
+    centers_list: list[Tensor],
+    spacings: Tensor,
+    assigner,
+    sigma_voxel: float = 5.0,
+    *,
+    alpha: float = 0.75,
+    gamma: float = 2.0,
+) -> tuple[Tensor, dict[str, float]]:
+    """Compute loss for multi-scale FCOS head using :class:`TaskAlignedAssigner`."""
+
+    device = logits_list[0].device
+    batch_size = spacings.size(0)
+
+    # --- prepare ground truth tensors ------------------------------------
+    n_max = max(c.size(0) for c in centers_list)
+    true_centers = torch.zeros(batch_size, n_max, 3, device=device)
+    true_labels = torch.ones(batch_size, n_max, 1, dtype=torch.long, device=device)
+    true_sigmas = torch.full((batch_size, n_max), sigma_voxel, device=device)
+    pad_mask = torch.zeros(batch_size, n_max, 1, device=device)
+
+    for b, (c, sp) in enumerate(zip(centers_list, spacings)):
+        if c.numel() == 0:
+            continue
+        n = c.size(0)
+        true_centers[b, :n] = c / sp
+        pad_mask[b, :n, 0] = 1.0
+
+    # --- flatten predictions --------------------------------------------
+    pred_scores = []
+    pred_logits = []
+    pred_centers = []
+    anchors_all = []
+    for lg, off, stride in zip(logits_list, offsets_list, strides):
+        B, _, D, H, W = lg.shape
+        anchors = anchors_for_offsets_feature_map((D, H, W), stride, device).view(3, -1).permute(1, 0)
+        centers = off.view(B, 3, -1).permute(0, 2, 1) + anchors.unsqueeze(0)
+        pred_centers.append(centers)
+        pred_scores.append(lg.sigmoid().view(B, 1, -1).permute(0, 2, 1))
+        pred_logits.append(lg.view(B, 1, -1).permute(0, 2, 1))
+        anchors_all.append(anchors)
+
+    pred_scores = torch.cat(pred_scores, dim=1)
+    pred_logits = torch.cat(pred_logits, dim=1)
+    pred_centers = torch.cat(pred_centers, dim=1)
+    anchors_cat = torch.cat(anchors_all, dim=0)
+
+    lbl, tgt_ctr, tgt_scr, tgt_sigma = assigner(
+        pred_scores,
+        pred_centers,
+        anchors_cat,
+        true_labels,
+        true_centers,
+        true_sigmas,
+        pad_mask,
+        bg_index=0,
+    )
+
+    label_mask = (lbl > 0).unsqueeze(-1)
+    cls_loss = varifocal_loss(pred_logits.squeeze(-1), tgt_scr.squeeze(-1), label_mask.float(), alpha=alpha, gamma=gamma)
+
+    if label_mask.any():
+        diff2 = (pred_centers - tgt_ctr).pow(2).sum(dim=-1)
+        iou = torch.exp(-diff2 / (2 * tgt_sigma**2))
+        iou_loss = (1 - iou[label_mask.squeeze(-1)]).mean()
+        l1 = F.smooth_l1_loss(
+            pred_centers[label_mask.squeeze(-1)],
+            tgt_ctr[label_mask.squeeze(-1)],
+            reduction="mean",
+        )
+        reg_loss = iou_loss + l1
+    else:
+        reg_loss = torch.tensor(0.0, device=device)
+
+    loss = cls_loss + reg_loss
+    logs = {
+        "loss": float(loss),
+        "loss_cls": float(cls_loss),
+        "loss_off": float(reg_loss),
+        "num_pos": float(label_mask.sum().item()),
+    }
+    return loss, logs

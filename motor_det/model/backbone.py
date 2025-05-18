@@ -28,3 +28,14 @@ class MotorBackbone(nn.Module):
             x = down(x)
             downs.append(x)
         return downs[1]                     # stride 2, channels 64
+
+    # ------------------------------------------------------------
+    def multi_feats(self, x: torch.Tensor):
+        """Return features at strides 4, 8, and 16."""
+        x = self.net.convInit(x)
+        downs = []
+        for down in self.net.down_layers:
+            x = down(x)
+            downs.append(x)
+        # ``downs`` indices: 0=stride4, 1=stride8, 2=stride16, 3=stride32
+        return downs[0], downs[1], downs[2]
