@@ -3,25 +3,51 @@ import numpy as np
 import torch
 
 
-def random_flip3d(volume: np.ndarray, cls_map: np.ndarray, off_map: np.ndarray):
-    """
-    Random 3-axis flip for NumPy volumes.
-      volume : (D, H, W)   uint8
-      cls_map: (1, D/2, H/2, W/2)
-      off_map: (3, D/2, H/2, W/2)
-    Returns flipped copies (np.ndarray).
-    """
-    # spatial axis 0-z,1-y,2-x   →  cls/off 는 채널이 1개 더 있으므로 +1
-    for ax in (0, 1, 2):
-        if np.random.rand() < 0.5:
-            volume = np.flip(volume, axis=ax)
-            cls_map = np.flip(cls_map, axis=ax + 1)
-            off_map = np.flip(off_map, axis=ax + 1)
-            # 해당 축 오프셋 부호 반전
-            off_map[ax] *= -1
+def random_flip3d(
+    volume: np.ndarray,
+    cls_map: np.ndarray,
+    off_map: np.ndarray,
+    *,
+    axes: tuple[int, ...] | None = None,
+    return_axes: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[
+    np.ndarray, np.ndarray, np.ndarray, tuple[int, ...]
+]:
+    """Randomly flip a 3-D sample along spatial axes.
 
-    # np.flip() 가 view 를 반환할 수 있어 .copy() 로 메모리 연속화
-    return volume.copy(), cls_map.copy(), off_map.copy()
+    Parameters
+    ----------
+    volume : ``(D, H, W)`` uint8 array
+    cls_map : ``(1, D/2, H/2, W/2)`` array
+    off_map : ``(3, D/2, H/2, W/2)`` array
+    axes : predefined axes to flip.  If ``None``, axes are sampled randomly.
+    return_axes : whether to return the axes used.
+
+    Returns
+    -------
+    Tuple of flipped arrays.  If ``return_axes`` is ``True`` a second tuple
+    containing the flipped axes is appended.
+    """
+
+    if axes is None:
+        axes = tuple(ax for ax in (0, 1, 2) if np.random.rand() < 0.5)
+    else:
+        axes = tuple(int(a) for a in axes)
+
+    for ax in axes:
+        volume = np.flip(volume, axis=ax)
+        cls_map = np.flip(cls_map, axis=ax + 1)
+        off_map = np.flip(off_map, axis=ax + 1)
+        off_map[ax] *= -1
+
+    volume = volume.copy()
+    cls_map = cls_map.copy()
+    off_map = off_map.copy()
+
+    if return_axes:
+        return volume, cls_map, off_map, axes
+    else:
+        return volume, cls_map, off_map
 
 
 def random_crop_around_point(
@@ -102,16 +128,36 @@ def random_gaussian_noise(volume: np.ndarray, std: float = 5.0) -> np.ndarray:
 
 
 def random_flip3d_torch(
-    volume: torch.Tensor, cls_map: torch.Tensor, off_map: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Torch version of :func:`random_flip3d` operating on CUDA tensors."""
-    for ax in (0, 1, 2):
-        if torch.rand(1, device=volume.device) < 0.5:
-            volume = torch.flip(volume, dims=(ax,))
-            cls_map = torch.flip(cls_map, dims=(ax + 1,))
-            off_map = torch.flip(off_map, dims=(ax + 1,))
-            off_map[ax].neg_()
-    return volume.contiguous(), cls_map.contiguous(), off_map.contiguous()
+    volume: torch.Tensor,
+    cls_map: torch.Tensor,
+    off_map: torch.Tensor,
+    *,
+    axes: tuple[int, ...] | None = None,
+    return_axes: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, tuple[int, ...]
+]:
+    """CUDA version of :func:`random_flip3d`."""
+
+    if axes is None:
+        axes = tuple(ax for ax in (0, 1, 2) if torch.rand(1, device=volume.device) < 0.5)
+    else:
+        axes = tuple(int(a) for a in axes)
+
+    for ax in axes:
+        volume = torch.flip(volume, dims=(ax,))
+        cls_map = torch.flip(cls_map, dims=(ax + 1,))
+        off_map = torch.flip(off_map, dims=(ax + 1,))
+        off_map[ax].neg_()
+
+    volume = volume.contiguous()
+    cls_map = cls_map.contiguous()
+    off_map = off_map.contiguous()
+
+    if return_axes:
+        return volume, cls_map, off_map, axes
+    else:
+        return volume, cls_map, off_map
 
 
 def random_erase3d_torch(volume: torch.Tensor, max_ratio: float = 0.3) -> torch.Tensor:

@@ -24,6 +24,26 @@ from motor_det.utils.augment import (
 )
 
 
+def _apply_flip_np(centers: np.ndarray, axes: tuple[int, ...], shape: tuple[int, int, int]) -> np.ndarray:
+    """Flip centre coordinates for NumPy arrays."""
+    if centers.size == 0 or not axes:
+        return centers
+    out = centers.copy()
+    for ax in axes:
+        out[:, ax] = shape[ax] - 1 - out[:, ax]
+    return out
+
+
+def _apply_flip_torch(centers: torch.Tensor, axes: tuple[int, ...], shape: tuple[int, int, int]) -> torch.Tensor:
+    """Flip centre coordinates for torch tensors."""
+    if centers.numel() == 0 or not axes:
+        return centers
+    out = centers.clone()
+    for ax in axes:
+        out[:, ax] = shape[ax] - 1 - out[:, ax]
+    return out
+
+
 class MotorTrainDataset(Dataset):
     """
     BYU Motor – 학습용 랜덤 Crop + Flip 증강 (Lazy Zarr I/O 버전)
@@ -110,15 +130,22 @@ class MotorTrainDataset(Dataset):
                 centers_t, crop_size=self.crop_size, stride=2, device=device
             )
             patch_t = torch.from_numpy(patch.astype(np.float32)).to(device)
-            patch_t, cls_map_t, off_map_t = random_flip3d_torch(patch_t, cls_map_t, off_map_t)
+            patch_t, cls_map_t, off_map_t, axes = random_flip3d_torch(
+                patch_t, cls_map_t, off_map_t, return_axes=True
+            )
+            centers_t = _apply_flip_torch(centers_t, axes, self.crop_size)
             patch_t = random_erase3d_torch(patch_t)
             patch_t = random_gaussian_noise_torch(patch_t)
+            centers_local = centers_t.cpu().numpy()
             return patch_t, cls_map_t, off_map_t, centers_local
         else:
             cls_map_np, off_map_np = build_target_maps(
                 centers_local.astype(np.float32), crop_size=self.crop_size, stride=2
             )
-            patch, cls_map_np, off_map_np = random_flip3d(patch, cls_map_np, off_map_np)
+            patch, cls_map_np, off_map_np, axes = random_flip3d(
+                patch, cls_map_np, off_map_np, return_axes=True
+            )
+            centers_local = _apply_flip_np(centers_local, axes, self.crop_size)
             patch = random_erase3d(patch)
             patch = random_gaussian_noise(patch)
             return patch, cls_map_np, off_map_np, centers_local
@@ -243,7 +270,10 @@ class MotorInstanceCropDataset(Dataset):
                 centers_t, crop_size=self.crop_size, stride=2, device=device
             )
             patch_t = torch.from_numpy(patch.astype(np.float32)).to(device)
-            patch_t, cls_map_t, off_map_t = random_flip3d_torch(patch_t, cls_map_t, off_map_t)
+            patch_t, cls_map_t, off_map_t, axes = random_flip3d_torch(
+                patch_t, cls_map_t, off_map_t, return_axes=True
+            )
+            centers_t = _apply_flip_torch(centers_t, axes, self.crop_size)
             patch_t = random_erase3d_torch(patch_t)
             patch_t = random_gaussian_noise_torch(patch_t)
             img_t = (patch_t / 255.0).unsqueeze(0)
@@ -254,7 +284,10 @@ class MotorInstanceCropDataset(Dataset):
                 crop_size=self.crop_size,
                 stride=2,
             )
-            patch, cls_map_np, off_map_np = random_flip3d(patch, cls_map_np, off_map_np)
+            patch, cls_map_np, off_map_np, axes = random_flip3d(
+                patch, cls_map_np, off_map_np, return_axes=True
+            )
+            centers_local = _apply_flip_np(centers_local, axes, self.crop_size)
             patch = random_erase3d(patch)
             patch = random_gaussian_noise(patch)
             img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
@@ -378,7 +411,10 @@ class MotorPositiveCropDataset(Dataset):
                 centers_t, crop_size=self.crop_size, stride=2, device=device
             )
             patch_t = torch.from_numpy(patch.astype(np.float32)).to(device)
-            patch_t, cls_map_t, off_map_t = random_flip3d_torch(patch_t, cls_map_t, off_map_t)
+            patch_t, cls_map_t, off_map_t, axes = random_flip3d_torch(
+                patch_t, cls_map_t, off_map_t, return_axes=True
+            )
+            centers_t = _apply_flip_torch(centers_t, axes, self.crop_size)
             patch_t = random_erase3d_torch(patch_t)
             patch_t = random_gaussian_noise_torch(patch_t)
             img_t = (patch_t / 255.0).unsqueeze(0)
@@ -389,7 +425,10 @@ class MotorPositiveCropDataset(Dataset):
                 crop_size=self.crop_size,
                 stride=2,
             )
-            patch, cls_map_np, off_map_np = random_flip3d(patch, cls_map_np, off_map_np)
+            patch, cls_map_np, off_map_np, axes = random_flip3d(
+                patch, cls_map_np, off_map_np, return_axes=True
+            )
+            centers_local = _apply_flip_np(centers_local, axes, self.crop_size)
             patch = random_erase3d(patch)
             patch = random_gaussian_noise(patch)
             img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
