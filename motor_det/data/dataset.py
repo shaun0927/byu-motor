@@ -462,3 +462,93 @@ class MotorPositiveCropDataset(Dataset):
             "centers_Å": centers_A,
             "spacing_Å_per_voxel": self.spacing,
         }
+
+
+class MotorRandomPositiveCropDataset(Dataset):
+    """Dataset that randomly samples crops around positive centres."""
+
+    def __init__(
+        self,
+        zarr_path: Path,
+        center_xyz: np.ndarray,
+        voxel_spacing: float,
+        crop_size: Tuple[int, int, int] = (96, 128, 128),
+        num_crops: int = 64,
+        jitter: int = 0,
+        *,
+        use_gpu: bool = True,
+    ) -> None:
+        self.vol = zarr.open(zarr_path, mode="r")
+        # ground-truth centres in voxel units
+        self.pos_centers = center_xyz.astype(np.float32) / voxel_spacing
+        self.spacing = float(voxel_spacing)
+        self.crop_size = crop_size
+        self.num_crops = int(num_crops)
+        self.jitter = int(jitter)
+        self.use_gpu = bool(use_gpu) and torch.cuda.is_available()
+
+    def __len__(self) -> int:
+        return self.num_crops
+
+    def __getitem__(self, idx: int):
+        ctr = self.pos_centers[np.random.randint(len(self.pos_centers))]
+
+        patch, start = random_crop_around_point(
+            self.vol, ctr, self.crop_size, jitter=self.jitter
+        )
+        z0, y0, x0 = start
+        z1, y1, x1 = (
+            z0 + self.crop_size[0],
+            y0 + self.crop_size[1],
+            x0 + self.crop_size[2],
+        )
+
+        mask = (
+            (self.pos_centers[:, 2] >= z0)
+            & (self.pos_centers[:, 2] < z1)
+            & (self.pos_centers[:, 1] >= y0)
+            & (self.pos_centers[:, 1] < y1)
+            & (self.pos_centers[:, 0] >= x0)
+            & (self.pos_centers[:, 0] < x1)
+        )
+        centers_local = self.pos_centers[mask] - np.array([x0, y0, z0], np.float32)
+
+        if self.use_gpu:
+            device = torch.device("cuda")
+            centers_t = torch.from_numpy(centers_local.astype(np.float32)).to(device)
+            cls_map_t, off_map_t = build_target_maps_torch(
+                centers_t, crop_size=self.crop_size, stride=2, device=device
+            )
+            patch_t = torch.from_numpy(patch.astype(np.float32)).to(device)
+            patch_t, cls_map_t, off_map_t, axes = random_flip3d_torch(
+                patch_t, cls_map_t, off_map_t, return_axes=True
+            )
+            centers_t = _apply_flip_torch(centers_t, axes, self.crop_size)
+            patch_t = random_erase3d_torch(patch_t)
+            patch_t = random_gaussian_noise_torch(patch_t)
+            img_t = (patch_t / 255.0).unsqueeze(0)
+            centers_A = centers_t * self.spacing
+        else:
+            cls_map_np, off_map_np = build_target_maps(
+                centers_local.astype(np.float32),
+                crop_size=self.crop_size,
+                stride=2,
+            )
+            patch, cls_map_np, off_map_np, axes = random_flip3d(
+                patch, cls_map_np, off_map_np, return_axes=True
+            )
+            centers_local = _apply_flip_np(centers_local, axes, self.crop_size)
+            patch = random_erase3d(patch)
+            patch = random_gaussian_noise(patch)
+            img_t = torch.from_numpy(patch.astype(np.float32) / 255.0).unsqueeze(0)
+            cls_map_t = torch.from_numpy(cls_map_np)
+            off_map_t = torch.from_numpy(off_map_np)
+            centers_A = torch.from_numpy(centers_local.astype(np.float32) * self.spacing)
+
+        return {
+            "image": img_t,
+            "cls": cls_map_t,
+            "offset": off_map_t,
+            "centers_Å": centers_A,
+            "spacing_Å_per_voxel": self.spacing,
+        }
