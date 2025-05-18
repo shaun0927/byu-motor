@@ -137,7 +137,9 @@ class LitMotorDet(L.LightningModule):
                 "val/fp":   fp,
                 "val/fn":   fn,
             },
-            prog_bar=True
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
         )
 
         # → Lightning 2.x 에서는 반환값이 필요 없으므로 그냥 종료

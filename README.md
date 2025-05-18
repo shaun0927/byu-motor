@@ -150,3 +150,18 @@ python -m motor_det.engine.infer \
     --out_csv preds.csv
 ```
 
+## 문제 해결
+
+### 느린 DataLoader 초기화
+
+Windows 환경에서 많은 `num_workers`를 사용할 경우 첫 스텝 시작 전이나
+검증 단계 직전에 대기 시간이 길어질 수 있습니다.
+아래와 같이 작업자 수를 줄이고 `--no-persistent_workers` 옵션을 지정하면
+속도가 개선되는 경우가 있습니다.
+
+```bash
+python -m motor_det.engine.train \
+  --data_root <DATA_ROOT> \
+  --num_workers 0 --no-persistent_workers
+```
+
