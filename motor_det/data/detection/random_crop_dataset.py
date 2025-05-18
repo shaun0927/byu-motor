@@ -29,8 +29,17 @@ class RandomCropDataset(DetectionDataset, PatchCacheMixin):
         use_gpu: bool = True,
         mixup_prob: float = 0.0,
         cutmix_prob: float = 0.0,
+        copy_paste_prob: float = 0.0,
+        copy_paste_limit: int = 1,
     ) -> None:
-        DetectionDataset.__init__(self, use_gpu=use_gpu, mixup_prob=mixup_prob, cutmix_prob=cutmix_prob)
+        DetectionDataset.__init__(
+            self,
+            use_gpu=use_gpu,
+            mixup_prob=mixup_prob,
+            cutmix_prob=cutmix_prob,
+            copy_paste_prob=copy_paste_prob,
+            copy_paste_limit=copy_paste_limit,
+        )
         PatchCacheMixin.__init__(self, cache_size=cache_size)
         self.vol = zarr.open(zarr_path, mode="r")
         self.centers = center_xyz.astype(np.float32) / voxel_spacing

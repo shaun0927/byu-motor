@@ -76,6 +76,8 @@ class TrainingConfig:
     valid_use_gpu_augment: bool | None = False
     mixup_prob: float = 0.0
     cutmix_prob: float = 0.0
+    copy_paste_prob: float = 0.0
+    copy_paste_limit: int = 1
     epochs: int = 10
     lr: float = 3e-4
     weight_decay: float = 1e-4
