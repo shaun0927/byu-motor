@@ -5,6 +5,7 @@ import lightning as L
 import torch
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from torch import nn, Tensor
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from motor_det.model.net import MotorDetNet
 from motor_det.loss.losses import motor_detection_loss
@@ -114,12 +115,9 @@ class LitMotorDet(L.LightningModule):
         self._val_outputs.append({"tp": tp_t, "fp": fp_t, "fn": fn_t})
 
         # (선택) 스텝 단위 로그
-        self.log_dict(
-            {"val/f2_step": f2, "val/prec_step": prec, "val/rec_step": rec},
-            on_step=True,
-            on_epoch=False,
-            prog_bar=True,
-        )
+        # 각 배치에 대한 세부 지표는 훈련 진행 표시를 지나치게
+        # 복잡하게 만들 수 있으므로 더 이상 기록하지 않는다.
+        # 필요한 경우 이벤트 파일에서 직접 값을 확인한다.
 
         # Print step metrics to the console
         rank_zero_info(
