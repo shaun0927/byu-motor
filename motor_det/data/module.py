@@ -217,14 +217,13 @@ class MotorDataModule(L.LightningDataModule):
         )
 
     def val_dataloader(self):
-        num_workers = 0 if self.valid_use_gpu_augment else self.nw
         return DataLoader(
             self.ds_val,
             batch_size=1,
             shuffle=False,
-            num_workers=num_workers,
+            num_workers=self.nw,
             pin_memory=self.pin_memory,
             prefetch_factor=self.prefetch_factor,
-            persistent_workers=self.persistent_workers if num_workers else False,
+            persistent_workers=self.persistent_workers,
             collate_fn=collate_with_centers,
         )
