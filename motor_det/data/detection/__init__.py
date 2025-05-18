@@ -6,7 +6,7 @@ from .sliding_window_dataset import (
     compute_tiles,
     compute_tiles_with_num_tiles,
 )
-from ..utils.tile import compute_better_tiles_with_num_tiles
+from ...utils.tile import compute_better_tiles_with_num_tiles
 
 __all__ = [
     "DetectionDataset",
