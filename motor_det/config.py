@@ -80,7 +80,7 @@ class TrainingConfig:
     freeze_backbone_epochs: int = 0
     gpus: int = 1
     nms_algorithm: str = "vectorized"
-    nms_switch_thr: int = 1000
+    nms_switch_thr: int = 1500
     max_steps: int | None = None
     limit_val_batches: float | int = 1.0
     val_check_interval: float | int = 1.0
@@ -108,7 +108,7 @@ class InferenceConfig:
     batch: int = 1
     num_workers: int = 4
 
-    prob_thr: float = 0.5
+    prob_thr: float = 0.6
     sigma: float = 60.0
     iou_thr: float = 0.25
     default_spacing: float = DEFAULT_TEST_SPACING
