@@ -11,6 +11,7 @@ import zarr
 from torch.utils.data import Dataset
 
 from .mixin import ObjectDetectionMixin, PatchCacheMixin
+from ...utils.tile import compute_better_tiles_with_num_tiles
 
 __all__ = ["SlidingWindowDataset", "compute_tiles", "compute_tiles_with_num_tiles"]
 
@@ -39,28 +40,7 @@ def compute_tiles_with_num_tiles(
     win: Tuple[int, int, int] = (192, 128, 128),
     num_tiles: Tuple[int, int, int] = (1, 9, 9),
 ) -> List[Tuple[slice, slice, slice]]:
-    dz, dy, dx = win
-    nz, ny, nx = num_tiles
-    Z, Y, X = vol_shape
-
-    def starts(L: int, w: int, n: int) -> List[int]:
-        if n <= 1:
-            return [max(0, (L - w) // 2)]
-        return [int(round(v)) for v in np.linspace(0, max(0, L - w), n)]
-
-    z_starts = starts(Z, dz, nz)
-    y_starts = starts(Y, dy, ny)
-    x_starts = starts(X, dx, nx)
-
-    tiles = []
-    for z0 in z_starts:
-        for y0 in y_starts:
-            for x0 in x_starts:
-                z1 = min(z0 + dz, Z)
-                y1 = min(y0 + dy, Y)
-                x1 = min(x0 + dx, X)
-                tiles.append((slice(z0, z1), slice(y0, y1), slice(x0, x1)))
-    return tiles
+    return list(compute_better_tiles_with_num_tiles(vol_shape, win, num_tiles))
 
 
 class SlidingWindowDataset(PatchCacheMixin, Dataset, ObjectDetectionMixin):
