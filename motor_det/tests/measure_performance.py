@@ -37,8 +37,8 @@ def evaluate(weights: Path, data_root: Path, fold: int = 0) -> dict[str, float]:
             centers = decode_with_nms(
                 out["cls"],
                 out["offset"],
-                stride=4,
-                prob_thr=0.5,
+                stride=2,
+                prob_thr=0.6,
                 sigma=60.0,
                 iou_thr=0.25,
             )[0]

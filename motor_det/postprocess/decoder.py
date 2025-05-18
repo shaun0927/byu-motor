@@ -38,7 +38,7 @@ def decode_detections(
     logits: torch.Tensor,         # (B,1,D,H,W)
     offsets: torch.Tensor,        # (B,3,D,H,W)
     stride: int = 2,
-    prob_thr: float = 0.5,
+    prob_thr: float = 0.6,
 ) -> List[torch.Tensor]:
     """
     배치-별 예측 좌표(Å) 리스트 반환
@@ -97,11 +97,11 @@ def decode_with_nms(
     logits: torch.Tensor,
     offsets: torch.Tensor,
     stride: int = 2,
-    prob_thr: float = 0.5,
+    prob_thr: float = 0.6,
     sigma: float = 60.0,
     iou_thr: float = 0.25,
     algorithm: str = "vectorized",
-    switch_thr: int = 1000,
+    switch_thr: int = 1500,
 ) -> List[torch.Tensor]:
     """Heatmap+Offset → NMS 후 Å 좌표 리스트.
 

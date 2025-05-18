@@ -26,7 +26,7 @@ class LitMotorDet(L.LightningModule):
         warmup_steps: int = 500,
         total_steps: int = 30_000,
         nms_algorithm: str = "vectorized",
-        nms_switch_thr: int = 1000,
+        nms_switch_thr: int = 1500,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -63,12 +63,7 @@ class LitMotorDet(L.LightningModule):
         self.log_dict(logs, prog_bar=True, on_step=True, on_epoch=True,
                       batch_size=batch_size)
 
-        # Print metrics to the console for real-time monitoring
-        msg = (
-            f"[{stage.upper()}] step {self.global_step:>6}: "
-            + ", ".join(f"{k.split('/')[-1]}={float(v):.4f}" for k, v in logs.items())
-        )
-        rank_zero_info(msg)
+        # Skip per-step console logging to keep output concise
 
         return loss
 
@@ -90,8 +85,8 @@ class LitMotorDet(L.LightningModule):
         centers_pred = decode_with_nms(
             logits,
             offsets,
-            stride=4,
-            prob_thr=0.5,
+            stride=2,
+            prob_thr=0.6,
             sigma=60.0,
             iou_thr=0.25,
             algorithm=self.hparams.nms_algorithm,
@@ -119,10 +114,7 @@ class LitMotorDet(L.LightningModule):
         # 복잡하게 만들 수 있으므로 더 이상 기록하지 않는다.
         # 필요한 경우 이벤트 파일에서 직접 값을 확인한다.
 
-        # Print step metrics to the console
-        rank_zero_info(
-            f"[VAL] step {self.global_step:>6}: f2={f2:.4f}, tp={tp}, fp={fp}, fn={fn}"
-        )
+        # Skip per-step validation logging
 
         return {"tp": tp_t, "fp": fp_t, "fn": fn_t}
 
