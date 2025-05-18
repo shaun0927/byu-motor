@@ -81,6 +81,7 @@ class TrainingConfig:
     gpus: int = 1
     nms_algorithm: str = "vectorized"
     nms_switch_thr: int = 1500
+    prob_thr: float = 0.6
     max_steps: int | None = None
     limit_val_batches: float | int = 1.0
     val_check_interval: float | int = 1.0

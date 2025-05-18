@@ -8,6 +8,7 @@ from typing import Sequence, Tuple
 
 import numpy as np
 import torch
+from functools import cached_property
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -24,11 +25,11 @@ class HannWindow:
         self.window = window
         self.stride = stride
 
-    @torch.cached_property
+    @cached_property
     def full(self) -> np.ndarray:
         return cosine_hann_3d(self.window)
 
-    @torch.cached_property
+    @cached_property
     def downsampled(self) -> np.ndarray:
         return self.full[:: self.stride, :: self.stride, :: self.stride]
 

@@ -56,6 +56,7 @@ def parse_args():
     p.add_argument("--cpu_augment", action="store_true", help="Run augmentation on CPU")
     p.add_argument("--mixup", type=float, default=0.0, help="MixUp probability")
     p.add_argument("--cutmix", type=float, default=0.0, help="CutMix probability")
+    p.add_argument("--prob_thr", type=float, default=0.6, help="NMS probability threshold")
     p.add_argument("--max_steps", type=int, default=None, help="Maximum training steps")
     p.add_argument("--limit_val_batches", type=float, default=1.0, help="Fraction of validation batches to run")
     p.add_argument(
@@ -110,6 +111,7 @@ def train(cfg: TrainingConfig):
         total_steps=total_steps,
         nms_algorithm=cfg.nms_algorithm,
         nms_switch_thr=cfg.nms_switch_thr,
+        prob_thr=cfg.prob_thr,
         focal_gamma=cfg.focal_gamma,
         pos_weight_clip=cfg.pos_weight_clip,
     )
@@ -177,6 +179,7 @@ def main() -> None:
     cfg.use_gpu_augment = not args.cpu_augment
     cfg.mixup_prob = args.mixup
     cfg.cutmix_prob = args.cutmix
+    cfg.prob_thr = args.prob_thr
     cfg.max_steps = args.max_steps
     cfg.limit_val_batches = args.limit_val_batches
     cfg.val_check_interval = args.val_check_interval

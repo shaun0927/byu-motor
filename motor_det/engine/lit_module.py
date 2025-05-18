@@ -27,6 +27,7 @@ class LitMotorDet(L.LightningModule):
         total_steps: int = 30_000,
         nms_algorithm: str = "vectorized",
         nms_switch_thr: int = 1500,
+        prob_thr: float = 0.6,
         focal_gamma: float = 2.0,
         pos_weight_clip: float = 5.0,
     ):
@@ -93,7 +94,7 @@ class LitMotorDet(L.LightningModule):
             logits,
             offsets,
             stride=2,
-            prob_thr=0.6,
+            prob_thr=self.hparams.prob_thr,
             sigma=60.0,
             iou_thr=0.25,
             algorithm=self.hparams.nms_algorithm,
