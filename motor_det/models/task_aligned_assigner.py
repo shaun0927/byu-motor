@@ -65,6 +65,12 @@ class TaskAlignedAssigner(nn.Module):
         batch_size, num_anchors, num_classes = pred_scores.shape
         _, num_max_boxes, _ = true_centers.shape
 
+        # ``anchor_points`` may be provided without a batch dimension.
+        # Expand to ``[B, N, 3]`` so shape expectations are consistent
+        # throughout the assignment routine.
+        if anchor_points.ndim == 2:
+            anchor_points = anchor_points.unsqueeze(0).expand(batch_size, -1, -1)
+
         if num_max_boxes == 0:
             assigned_labels = torch.full([batch_size, num_anchors], bg_index, dtype=torch.long, device=true_labels.device)
             assigned_points = torch.zeros([batch_size, num_anchors, 3], device=true_labels.device)
