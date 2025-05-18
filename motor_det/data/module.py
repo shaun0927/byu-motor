@@ -45,6 +45,8 @@ class MotorDataModule(L.LightningDataModule):
         valid_use_gpu_augment: bool | None = None,
         mixup_prob: float = 0.0,
         cutmix_prob: float = 0.0,
+        copy_paste_prob: float = 0.0,
+        copy_paste_limit: int = 1,
         val_num_crops: int = 128,
     ):
         super().__init__()
@@ -74,6 +76,8 @@ class MotorDataModule(L.LightningDataModule):
         )
         self.mixup_prob = mixup_prob
         self.cutmix_prob = cutmix_prob
+        self.copy_paste_prob = copy_paste_prob
+        self.copy_paste_limit = copy_paste_limit
 
     # -------------------- fold split util ------------------------------ #
     @staticmethod
@@ -129,6 +133,8 @@ class MotorDataModule(L.LightningDataModule):
                         use_gpu=use_gpu,
                         mixup_prob=self.mixup_prob,
                         cutmix_prob=self.cutmix_prob,
+                        copy_paste_prob=self.copy_paste_prob,
+                        copy_paste_limit=self.copy_paste_limit,
                     ),
                     RandomCropDataset(
                         zarr_path,
@@ -139,6 +145,8 @@ class MotorDataModule(L.LightningDataModule):
                         use_gpu=use_gpu,
                         mixup_prob=self.mixup_prob,
                         cutmix_prob=self.cutmix_prob,
+                        copy_paste_prob=self.copy_paste_prob,
+                        copy_paste_limit=self.copy_paste_limit,
                     ),
                 ]
                 if self.train_include_sliding_dataset:
@@ -162,6 +170,8 @@ class MotorDataModule(L.LightningDataModule):
                     use_gpu=use_gpu,
                     mixup_prob=0.0,
                     cutmix_prob=0.0,
+                    copy_paste_prob=0.0,
+                    copy_paste_limit=self.copy_paste_limit,
                 )
             datasets.append(ds)
 

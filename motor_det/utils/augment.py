@@ -279,3 +279,103 @@ def cutmix3d_torch(vol_a: torch.Tensor, cls_a: torch.Tensor, off_a: torch.Tensor
     off[:, gz0:gz1, gy0:gy1, gx0:gx1] = off_b[:, gz0:gz1, gy0:gy1, gx0:gx1]
     return vol, cls, off
 
+
+def copy_paste3d(
+    vol_a: np.ndarray,
+    cls_a: np.ndarray,
+    off_a: np.ndarray,
+    vol_b: np.ndarray,
+    cls_b: np.ndarray,
+    off_b: np.ndarray,
+    sigma: float = 4.0,
+):
+    """Paste a random cuboid from ``vol_b`` into ``vol_a`` using Gaussian weights."""
+
+    D, H, W = vol_a.shape
+    dz = np.random.randint(D // 4, D // 2 + 1)
+    dy = np.random.randint(H // 4, H // 2 + 1)
+    dx = np.random.randint(W // 4, W // 2 + 1)
+
+    z0 = np.random.randint(0, max(1, D - dz + 1))
+    y0 = np.random.randint(0, max(1, H - dy + 1))
+    x0 = np.random.randint(0, max(1, W - dx + 1))
+    z1, y1, x1 = z0 + dz, y0 + dy, x0 + dx
+
+    region_a = vol_a[z0:z1, y0:y1, x0:x1].astype(np.float32)
+    region_b = vol_b[z0:z1, y0:y1, x0:x1].astype(np.float32)
+
+    zz = np.linspace(-1.0, 1.0, dz).reshape(-1, 1, 1)
+    yy = np.linspace(-1.0, 1.0, dy).reshape(1, -1, 1)
+    xx = np.linspace(-1.0, 1.0, dx).reshape(1, 1, -1)
+    weight = np.exp(-((zz**2 + yy**2 + xx**2) / (2 * sigma**2)))
+
+    region = region_a * (1.0 - weight) + region_b * weight
+    vol = vol_a.copy()
+    vol[z0:z1, y0:y1, x0:x1] = np.clip(region, 0, 255).astype(np.uint8)
+
+    gz0, gy0, gx0 = z0 // 2, y0 // 2, x0 // 2
+    gz1, gy1, gx1 = z1 // 2, y1 // 2, x1 // 2
+    weight_s = weight[::2, ::2, ::2]
+
+    cls = cls_a.copy()
+    off = off_a.copy()
+    cls[:, gz0:gz1, gy0:gy1, gx0:gx1] = (
+        cls[:, gz0:gz1, gy0:gy1, gx0:gx1] * (1.0 - weight_s)
+        + cls_b[:, gz0:gz1, gy0:gy1, gx0:gx1] * weight_s
+    )
+    off[:, gz0:gz1, gy0:gy1, gx0:gx1] = (
+        off[:, gz0:gz1, gy0:gy1, gx0:gx1] * (1.0 - weight_s)
+        + off_b[:, gz0:gz1, gy0:gy1, gx0:gx1] * weight_s
+    )
+    return vol, cls, off
+
+
+def copy_paste3d_torch(
+    vol_a: torch.Tensor,
+    cls_a: torch.Tensor,
+    off_a: torch.Tensor,
+    vol_b: torch.Tensor,
+    cls_b: torch.Tensor,
+    off_b: torch.Tensor,
+    sigma: float = 4.0,
+):
+    """CUDA version of :func:`copy_paste3d`."""
+
+    D, H, W = vol_a.shape
+    dz = int(torch.randint(D // 4, D // 2 + 1, (1,)))
+    dy = int(torch.randint(H // 4, H // 2 + 1, (1,)))
+    dx = int(torch.randint(W // 4, W // 2 + 1, (1,)))
+
+    z0 = int(torch.randint(0, max(1, D - dz + 1), (1,)))
+    y0 = int(torch.randint(0, max(1, H - dy + 1), (1,)))
+    x0 = int(torch.randint(0, max(1, W - dx + 1), (1,)))
+    z1, y1, x1 = z0 + dz, y0 + dy, x0 + dx
+
+    region_a = vol_a[z0:z1, y0:y1, x0:x1].float()
+    region_b = vol_b[z0:z1, y0:y1, x0:x1].float()
+
+    zz = torch.linspace(-1.0, 1.0, dz, device=vol_a.device).view(-1, 1, 1)
+    yy = torch.linspace(-1.0, 1.0, dy, device=vol_a.device).view(1, -1, 1)
+    xx = torch.linspace(-1.0, 1.0, dx, device=vol_a.device).view(1, 1, -1)
+    weight = torch.exp(-((zz**2 + yy**2 + xx**2) / (2 * sigma**2)))
+
+    region = region_a.mul(1.0 - weight).add_(region_b, alpha=1.0)
+    vol = vol_a.clone()
+    vol[z0:z1, y0:y1, x0:x1] = region.clamp_(0, 255).type_as(vol_a)
+
+    gz0, gy0, gx0 = z0 // 2, y0 // 2, x0 // 2
+    gz1, gy1, gx1 = z1 // 2, y1 // 2, x1 // 2
+    weight_s = weight[::2, ::2, ::2]
+
+    cls = cls_a.clone()
+    off = off_a.clone()
+    cls[:, gz0:gz1, gy0:gy1, gx0:gx1] = (
+        cls[:, gz0:gz1, gy0:gy1, gx0:gx1] * (1.0 - weight_s)
+        + cls_b[:, gz0:gz1, gy0:gy1, gx0:gx1] * weight_s
+    )
+    off[:, gz0:gz1, gy0:gy1, gx0:gx1] = (
+        off[:, gz0:gz1, gy0:gy1, gx0:gx1] * (1.0 - weight_s)
+        + off_b[:, gz0:gz1, gy0:gy1, gx0:gx1] * weight_s
+    )
+    return vol, cls, off
+

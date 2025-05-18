@@ -39,6 +39,8 @@ def cli() -> argparse.Namespace:
     p.add_argument("--cpu_augment", action="store_true")
     p.add_argument("--mixup", type=float, default=0.0)
     p.add_argument("--cutmix", type=float, default=0.0)
+    p.add_argument("--copy_paste", type=float, default=0.0)
+    p.add_argument("--copy_paste_limit", type=int, default=1)
 
     # crop sizes
     p.add_argument("--train_depth", type=int, default=96)
@@ -89,6 +91,8 @@ def main() -> None:
         valid_use_gpu_augment=False,
         mixup_prob=args.mixup,
         cutmix_prob=args.cutmix,
+        copy_paste_prob=args.copy_paste,
+        copy_paste_limit=args.copy_paste_limit,
     )
     dm.setup()
 
