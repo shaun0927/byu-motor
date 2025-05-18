@@ -322,12 +322,6 @@ class MotorInstanceCropDataset(Dataset):
             "spacing_Å_per_voxel": self.spacing,
         }
     
-class PositiveOnlyCropDataset(MotorInstanceCropDataset):
-    """Dataset that samples only positive crops around ground-truth centers."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        kwargs["negative_ratio"] = 0.0
-        super().__init__(*args, **kwargs)
 
 class BackgroundRandomCropDataset(Dataset):
     """Simple negative crop dataset used with ``ConcatDataset``."""

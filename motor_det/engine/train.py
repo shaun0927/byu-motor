@@ -38,7 +38,12 @@ def parse_args():
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)
     p.add_argument("--fold", type=int, default=0)
-    p.add_argument("--positive_only", action="store_true")
+    p.add_argument(
+        "--positive_only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use positive-only random crops by default",
+    )
     p.add_argument("--gpus", type=int, default=1)
     p.add_argument("--train_depth_window_size", type=int, default=96)
     p.add_argument("--train_spatial_window_size", type=int, default=128)

@@ -36,7 +36,7 @@ class MotorDataModule(L.LightningDataModule):
         batch_size: int = 2,
         num_workers: int = 12,
         persistent_workers: bool = True,
-        positive_only: bool = False,
+        positive_only: bool = True,
         train_crop_size: tuple[int, int, int] = (96, 128, 128),
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
         *,
