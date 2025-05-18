@@ -17,6 +17,7 @@ def evaluate(weights: Path, data_root: Path, fold: int = 0) -> dict[str, float]:
         batch_size=1,
         num_workers=12,
         persistent_workers=True,
+        preload_volumes=False,
         use_gpu_augment=False,
         valid_use_gpu_augment=False,
     )
