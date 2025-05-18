@@ -107,7 +107,9 @@ class LitMotorDet(L.LightningModule):
         # (선택) 스텝 단위 로그
         self.log_dict(
             {"val/f2_step": f2, "val/prec_step": prec, "val/rec_step": rec},
-            on_step=True, on_epoch=False, prog_bar=False
+            on_step=True,
+            on_epoch=False,
+            prog_bar=True,
         )
 
         return {"tp": tp_t, "fp": fp_t, "fn": fn_t}
@@ -137,7 +139,9 @@ class LitMotorDet(L.LightningModule):
                 "val/fp":   fp,
                 "val/fn":   fn,
             },
-            prog_bar=True
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
         )
 
         # → Lightning 2.x 에서는 반환값이 필요 없으므로 그냥 종료
