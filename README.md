@@ -71,6 +71,8 @@ python -m motor_det.engine.train \
 
 `--cpu_augment`를 사용하면 증강을 CPU에서 수행합니다. 이 경우 `--pin_memory`를 함께 지정하면 데이터 전송 속도를 높일 수 있습니다. 본 스크립트는 기본적으로 `persistent_workers=True`와 `prefetch_factor=2`를 사용해 데이터 로더 초기화를 최소화합니다. 필요하면 `--no-persistent_workers` 플래그로 끌 수 있습니다.
 
+모터가 없는 부정 패치도 함께 학습에 사용되며 이는 클래스 균형을 맞추는 데 도움이 됩니다. 만약 모터가 있는 영역만 사용하고 싶다면 `--positive_only` 플래그를 지정하세요.
+
 슬라이딩 윈도우 추론 시에는 패치를 메모리 캐시에 저장해 중복 I/O를 줄입니다.
 
 학습 로그와 체크포인트는 `runs/motor_fold<fold>` 아래에 저장되며 TensorBoard로 모니터링할 수 있습니다:

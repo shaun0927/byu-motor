@@ -32,7 +32,12 @@ def cli() -> argparse.Namespace:
     p.add_argument("--pin_memory", action="store_true")
     p.add_argument("--prefetch_factor", type=int, default=2)
 
-    p.add_argument("--positive_only", action=argparse.BooleanOptionalAction, default=False)
+    p.add_argument(
+        "--positive_only",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="only sample patches containing motors",
+    )
     p.add_argument("--train_num_instance_crops", type=int, default=128)
     p.add_argument("--train_num_random_crops", type=int, default=128)
     p.add_argument("--train_include_sliding_dataset", action=argparse.BooleanOptionalAction, default=False)
