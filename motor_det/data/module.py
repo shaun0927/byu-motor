@@ -1,154 +1,146 @@
+from __future__ import annotations
+import numpy as np
+from pathlib import Path
+from typing import Iterable
+
 import lightning as L
 import torch
-import numpy as np
 from torch.utils.data import DataLoader, ConcatDataset
-from pathlib import Path
-from motor_det.data.detection import (
-    InstanceCropDataset,
-    PositiveOnlyCropDataset,
-)
+from sklearn.model_selection import StratifiedGroupKFold
+
+from motor_det.data.detection import InstanceCropDataset
 from motor_det.utils.collate import collate_with_centers
 from motor_det.utils.voxel import (
     voxel_spacing_map,
     read_train_centers,
     DEFAULT_TEST_SPACING,
 )
-from sklearn.model_selection import StratifiedGroupKFold
 
 
 class MotorDataModule(L.LightningDataModule):
-    """Builds training and validation dataloaders for BYU Motor.
+    """Build BYU-Motor train / val DataLoaders (crop-based)."""
 
-    If ``use_gpu_augment`` is ``True`` (default), each dataset performs
-    augmentation on CUDA tensors.  In this mode ``pin_memory`` should remain
-    ``False`` because PyTorch cannot pin already CUDA-resident tensors and will
-    raise ``RuntimeError`` when the DataLoader attempts to do so.
-
-    The ``valid_use_gpu_augment`` flag controls whether the validation dataset
-    also runs augmentation on GPU.  If omitted, it defaults to the value of
-    ``use_gpu_augment``.  Disabling GPU augmentation for validation is often
-    faster.
-    """
+    # ------------------------------------------------------------------ #
     def __init__(
         self,
         data_root: str,
         fold: int,
+        *,
         batch_size: int = 2,
         num_workers: int = 12,
         persistent_workers: bool = True,
-        positive_only: bool = True,
+        positive_only: bool = False,                 # ← 기본 False
+        num_crops_per_tomo: int = 256,               # ← 새 인자
         train_crop_size: tuple[int, int, int] = (96, 128, 128),
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
-        *,
         pin_memory: bool = False,
         prefetch_factor: int | None = 2,
         use_gpu_augment: bool = True,
         valid_use_gpu_augment: bool | None = None,
         mixup_prob: float = 0.0,
         cutmix_prob: float = 0.0,
+        val_num_crops: int = 128,
     ):
         super().__init__()
         self.root = Path(data_root)
         self.fold = fold
+
+        # dataloader 설정
         self.bs = batch_size
         self.nw = num_workers
         self.persistent_workers = persistent_workers
-        self.positive_only = bool(positive_only)
-        self.train_crop_size = tuple(train_crop_size)
-        self.valid_crop_size = tuple(valid_crop_size)
-        self.pin_memory = bool(pin_memory)
+        self.pin_memory = pin_memory
         self.prefetch_factor = prefetch_factor
+
+        # dataset 파라미터
+        self.positive_only = bool(positive_only)
+        self.num_crops_per_tomo = int(num_crops_per_tomo)
+        self.train_crop_size = train_crop_size
+        self.valid_crop_size = valid_crop_size
+        self.val_num_crops = int(val_num_crops)
+
+        # augmentation
         self.use_gpu_augment = bool(use_gpu_augment)
         self.valid_use_gpu_augment = (
             self.use_gpu_augment if valid_use_gpu_augment is None else bool(valid_use_gpu_augment)
         )
-        self.mixup_prob = float(mixup_prob)
-        self.cutmix_prob = float(cutmix_prob)
+        self.mixup_prob = mixup_prob
+        self.cutmix_prob = cutmix_prob
 
-    def setup(self, stage=None):
-        # spacing map 과 train centers 데이터프레임 읽기
+    # -------------------- fold split util ------------------------------ #
+    @staticmethod
+    def _split_folds(df, n_splits: int = 5, seed: int = 42):
+        if "fold" in df.columns and df["fold"].nunique() > 1:
+            return df
+
+        df = df.copy()
+        df["motor_present"] = (df["Motor axis 0"] >= 0).astype(int)
+        sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        fold_arr = np.full(len(df), -1, dtype=int)
+        for f, (_, val_idx) in enumerate(sgkf.split(df, y=df["motor_present"], groups=df["tomo_id"])):
+            fold_arr[val_idx] = f
+        df["fold"] = fold_arr
+        return df
+
+    # -------------------- dataset builder ------------------------------ #
+    def _make_crop_ds(
+        self,
+        ids: Iterable[str],
+        centers_df,
+        spacing_map,
+        *,
+        training: bool,
+        use_gpu: bool,
+    ):
+        crop_size = self.train_crop_size if training else self.valid_crop_size
+        datasets = []
+
+        for tid in ids:
+            zarr_path = self.root / "processed" / "zarr" / "train" / f"{tid}.zarr"
+            if not zarr_path.exists():
+                continue
+
+            sub = centers_df[centers_df["tomo_id"] == tid]
+            sub = sub[sub["Motor axis 0"] >= 0]          # GT 필터
+            centers = sub[["Motor axis 2", "Motor axis 1", "Motor axis 0"]].values.astype(np.float32)
+            vx = spacing_map.get(tid, DEFAULT_TEST_SPACING)
+
+            # positive-only 모드라면 GT 없는 tomo skip
+            if self.positive_only and len(centers) == 0:
+                continue
+
+            ds = InstanceCropDataset(
+                zarr_path,
+                centers,
+                vx,
+                crop_size=crop_size,
+                num_crops=self.num_crops_per_tomo if training else self.val_num_crops,
+                negative_ratio=0.0 if self.positive_only else 0.2,   # ← 핵심!
+                use_gpu=use_gpu,
+                mixup_prob=self.mixup_prob if training else 0.0,
+                cutmix_prob=self.cutmix_prob if training else 0.0,
+            )
+            datasets.append(ds)
+
+        if not datasets:
+            raise ValueError(f"No valid tomograms for ids={list(ids)}")
+        return ConcatDataset(datasets)
+
+    # -------------------- Lightning hooks ------------------------------ #
+    def setup(self, stage: str | None = None):
         spacing_map = voxel_spacing_map(self.root)
-        centers_df = read_train_centers(self.root)
+        centers_df = self._split_folds(read_train_centers(self.root))
 
-        # fold 정보가 없으면 StratifiedGroupKFold 로 자동 생성
-        if centers_df["fold"].nunique() <= 1:
-            centers_df["motor_present"] = (centers_df["Motor axis 0"] >= 0).astype(int)
-            sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
-            fold_arr = np.full(len(centers_df), -1, dtype=int)
-            for f, (_, val_idx) in enumerate(
-                sgkf.split(
-                    X=centers_df,
-                    y=centers_df["motor_present"],
-                    groups=centers_df["tomo_id"],
-                )
-            ):
-                fold_arr[val_idx] = f
-            centers_df["fold"] = fold_arr
-
-        # train / val tomo_id 리스트 분리
         val_ids = centers_df.loc[centers_df["fold"] == self.fold, "tomo_id"].unique()
         train_ids = centers_df.loc[centers_df["fold"] != self.fold, "tomo_id"].unique()
 
-        # 데이터셋 생성
-        self.ds_train = self._build_ds(
-            train_ids, centers_df, spacing_map, training=True, use_gpu=self.use_gpu_augment
-        )
-        self.ds_val = self._build_ds(
-            val_ids,
-            centers_df,
-            spacing_map,
-            training=False,
-            use_gpu=self.valid_use_gpu_augment,
-        )
-
-    def _build_ds(self, ids, centers_df, spacing_map, training=True, *, use_gpu=True):
-        datasets = []
-        crop_size = self.train_crop_size if training else self.valid_crop_size
-        for tid in ids:
-            # 빈 문자열이나 None 은 건너뜁니다
-            if not tid:
-                continue
-            # zarr 경로 결정 (train 셋은 모두 processed/zarr/train)
-            zarr_path = self.root / "processed" / "zarr" / "train" / f"{tid}.zarr"
-            # 실제 파일이 존재하는지 확인
-            if not zarr_path.exists():
-                continue
-            # 이 tomo 에 해당하는 GT 좌표 (X, Y, Z 순으로 정렬)
-            sub_df = centers_df[centers_df["tomo_id"] == tid]
-            # `Motor axis 0` 이 음수이면 해당 tomogram 에 motor 가 없음
-            sub_df = sub_df[sub_df["Motor axis 0"] >= 0]
-
-            centers = sub_df[["Motor axis 2", "Motor axis 1", "Motor axis 0"]].values.astype(np.float32)
-            vx = spacing_map.get(tid, DEFAULT_TEST_SPACING)
-
-            if self.positive_only and len(centers) == 0:
-                # skip tomograms without GT when using positive-only crops
-                continue
-
-            if self.positive_only:
-                ds = PositiveOnlyCropDataset(
-                    zarr_path,
-                    centers,
-                    vx,
-                    crop_size=crop_size,
-                    use_gpu=use_gpu,
-                )
-            else:
-                ds = InstanceCropDataset(
-                    zarr_path,
-                    centers,
-                    vx,
-                    crop_size=crop_size,
-                    use_gpu=use_gpu,
-                    mixup_prob=self.mixup_prob if training else 0.0,
-                    cutmix_prob=self.cutmix_prob if training else 0.0,
-                )
-
-            datasets.append(ds)
-
-        if len(datasets) == 0:
-            raise ValueError(f"Fold {self.fold}에 사용 가능한 Zarr 데이터가 없습니다: ids={ids}")
-        return ConcatDataset(datasets)
+        if stage in (None, "fit"):
+            self.ds_train = self._make_crop_ds(
+                train_ids, centers_df, spacing_map, training=True, use_gpu=self.use_gpu_augment
+            )
+            self.ds_val = self._make_crop_ds(
+                val_ids, centers_df, spacing_map, training=False, use_gpu=self.valid_use_gpu_augment
+            )
 
     def train_dataloader(self):
         return DataLoader(
@@ -159,7 +151,6 @@ class MotorDataModule(L.LightningDataModule):
             pin_memory=self.pin_memory,
             prefetch_factor=self.prefetch_factor,
             persistent_workers=self.persistent_workers,
-            drop_last=False,
             collate_fn=collate_with_centers,
         )
 
@@ -172,6 +163,5 @@ class MotorDataModule(L.LightningDataModule):
             pin_memory=self.pin_memory,
             prefetch_factor=self.prefetch_factor,
             persistent_workers=self.persistent_workers,
-            drop_last=False,
             collate_fn=collate_with_centers,
         )

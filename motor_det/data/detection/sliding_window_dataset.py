@@ -10,7 +10,7 @@ from functools import cached_property
 import zarr
 from torch.utils.data import Dataset
 
-from .mixin import ObjectDetectionMixin
+from .mixin import ObjectDetectionMixin, PatchCacheMixin
 
 __all__ = ["SlidingWindowDataset", "compute_tiles", "compute_tiles_with_num_tiles"]
 
@@ -63,7 +63,7 @@ def compute_tiles_with_num_tiles(
     return tiles
 
 
-class SlidingWindowDataset(Dataset, ObjectDetectionMixin):
+class SlidingWindowDataset(PatchCacheMixin, Dataset, ObjectDetectionMixin):
     """Lazily reads patches from a Zarr tomogram."""
 
     def __init__(
@@ -98,15 +98,10 @@ class SlidingWindowDataset(Dataset, ObjectDetectionMixin):
 
     def __getitem__(self, idx):
         tz, ty, tx = self.tiles[idx]
-        key = (tz.start, ty.start, tx.start)
-        if key in self._patch_cache:
-            self._patch_cache.move_to_end(key)
-            patch = self._patch_cache[key]
-        else:
-            patch = self.store[tz, ty, tx].astype(self.dtype)
-            self._patch_cache[key] = patch
-            if len(self._patch_cache) > self._cache_size:
-                self._patch_cache.popitem(last=False)
+        # Mixin이 제공하는 LRU 캐시 사용
+        start = (tz.start, ty.start, tx.start)
+        patch = self._load_patch_cached(self.store, start, self.window).astype(self.dtype)
+
         dz, dy, dx = self.window
         pad = (
             (0, dz - patch.shape[0]),
@@ -115,7 +110,9 @@ class SlidingWindowDataset(Dataset, ObjectDetectionMixin):
         )
         if any(p[1] > 0 for p in pad):
             patch = np.pad(patch, pad, mode="constant")
-        return self.convert_to_dict(torch.from_numpy(patch), None, None, np.empty((0, 3), np.float32)) | {
-            "origin": (tz.start, ty.start, tx.start)
-        }
+
+        return (
+            self.convert_to_dict(torch.from_numpy(patch), None, None, np.empty((0, 3), np.float32))
+            | {"origin": start}
+        )
 
