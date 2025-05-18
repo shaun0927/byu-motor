@@ -16,9 +16,7 @@ from motor_det.metrics.det_metric  import fbeta_score
 
 
 class LitMotorDet(L.LightningModule):
-    """
-    LightningModule wrapping MotorDetNet + custom BCE + L1 loss.
-    """
+    """Lightning module using Task-Aligned assignment and focal/IoU loss."""
 
     def __init__(
         self,
