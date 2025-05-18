@@ -33,7 +33,9 @@ def cli() -> argparse.Namespace:
     p.add_argument("--prefetch_factor", type=int, default=2)
 
     p.add_argument("--positive_only", action=argparse.BooleanOptionalAction, default=False)
-    p.add_argument("--num_crops_per_tomo", type=int, default=256)           # ← 새 옵션
+    p.add_argument("--train_num_instance_crops", type=int, default=128)
+    p.add_argument("--train_num_random_crops", type=int, default=128)
+    p.add_argument("--train_include_sliding_dataset", action=argparse.BooleanOptionalAction, default=False)
     p.add_argument("--cpu_augment", action="store_true")
     p.add_argument("--mixup", type=float, default=0.0)
     p.add_argument("--cutmix", type=float, default=0.0)
@@ -76,7 +78,9 @@ def main() -> None:
         num_workers=args.num_workers,
         persistent_workers=args.persistent_workers,
         positive_only=args.positive_only,
-        num_crops_per_tomo=args.num_crops_per_tomo,              # ← 전달
+        train_num_instance_crops=args.train_num_instance_crops,
+        train_num_random_crops=args.train_num_random_crops,
+        train_include_sliding_dataset=args.train_include_sliding_dataset,
         train_crop_size=(args.train_depth, args.train_spatial, args.train_spatial),
         valid_crop_size=(args.valid_depth, args.valid_spatial, args.valid_spatial),
         pin_memory=args.pin_memory,
