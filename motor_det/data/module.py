@@ -35,7 +35,7 @@ class MotorDataModule(L.LightningDataModule):
         persistent_workers: bool = True,
         positive_only: bool = False,
         train_num_instance_crops: int = 128,
-        train_num_random_crops: int = 128,
+        train_num_random_crops: int = 0,
         train_include_sliding_dataset: bool = False,
         train_crop_size: tuple[int, int, int] = (96, 128, 128),
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
@@ -136,19 +136,22 @@ class MotorDataModule(L.LightningDataModule):
                         copy_paste_prob=self.copy_paste_prob,
                         copy_paste_limit=self.copy_paste_limit,
                     ),
-                    RandomCropDataset(
-                        zarr_path,
-                        centers,
-                        vx,
-                        crop_size=self.train_crop_size,
-                        num_crops=self.train_num_random_crops,
-                        use_gpu=use_gpu,
-                        mixup_prob=self.mixup_prob,
-                        cutmix_prob=self.cutmix_prob,
-                        copy_paste_prob=self.copy_paste_prob,
-                        copy_paste_limit=self.copy_paste_limit,
-                    ),
                 ]
+                if self.train_num_random_crops > 0:
+                    sub_datasets.append(
+                        RandomCropDataset(
+                            zarr_path,
+                            centers,
+                            vx,
+                            crop_size=self.train_crop_size,
+                            num_crops=self.train_num_random_crops,
+                            use_gpu=use_gpu,
+                            mixup_prob=self.mixup_prob,
+                            cutmix_prob=self.cutmix_prob,
+                            copy_paste_prob=self.copy_paste_prob,
+                            copy_paste_limit=self.copy_paste_limit,
+                        )
+                    )
                 if self.train_include_sliding_dataset:
                     sub_datasets.append(
                         SlidingWindowDataset(
