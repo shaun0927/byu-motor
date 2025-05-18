@@ -81,7 +81,7 @@ class TrainingConfig:
     gpus: int = 1
     nms_algorithm: str = "vectorized"
     nms_switch_thr: int = 1500
-    prob_thr: float = 0.1
+    prob_thr: float = 0.02
     max_steps: int | None = None
     limit_val_batches: float | int = 1.0
     val_check_interval: float | int = 1.0
@@ -117,7 +117,7 @@ class InferenceConfig:
     num_tiles_w: int | None = None
     tile_xy: int | None = None
 
-    prob_thr: float = 0.6
+    prob_thr: float = 0.02
     sigma: float = 60.0
     iou_thr: float = 0.25
     default_spacing: float = DEFAULT_TEST_SPACING

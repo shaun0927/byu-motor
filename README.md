@@ -61,6 +61,14 @@ python -m motor_det.engine.train \
 검증 단계에서 사용할 NMS 방식은 `nms_algorithm` 옵션으로 결정하며 기본값인 `vectorized` 모드는 탐지 개수가 `--nms_switch_thr`를 넘으면 자동으로 `greedy`로 전환됩니다.
 `--prob_thr` 값으로 NMS 전에 적용되는 최소 확률을 조절할 수 있으며 초기 학습 단계에서 너무 높은 임계값 때문에 탐지가 전혀 없을 경우 이 값을 낮추면 도움이 됩니다.
 
+예를 들어 임계값을 0.02로 지정하려면 다음과 같이 입력합니다:
+
+```bash
+python -m motor_det.engine.train \
+  --data_root <DATA_ROOT> \
+  --prob_thr 0.02
+```
+
 `--cpu_augment`를 사용하면 증강을 CPU에서 수행합니다. 이 경우 `--pin_memory`를 함께 지정하면 데이터 전송 속도를 높일 수 있습니다. 본 스크립트는 기본적으로 `persistent_workers=True`와 `prefetch_factor=2`를 사용해 데이터 로더 초기화를 최소화합니다. 필요하면 `--no-persistent_workers` 플래그로 끌 수 있습니다.
 
 슬라이딩 윈도우 추론 시에는 패치를 메모리 캐시에 저장해 중복 I/O를 줄입니다.

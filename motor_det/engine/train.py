@@ -53,6 +53,8 @@ def cli() -> argparse.Namespace:
     p.add_argument("--val_check_interval", type=float, default=1.0)
     p.add_argument("--num_sanity_val_steps", type=int, default=0)
 
+    p.add_argument("--prob_thr", type=float, default=0.02)
+
     # misc
     p.add_argument("--gpus", type=int, default=1)
     p.add_argument("--transfer_weights", type=str, default=None)
@@ -92,6 +94,7 @@ def main() -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
         total_steps=total_steps,
+        prob_thr=args.prob_thr,
     )
     if args.transfer_weights:
         ckpt = torch.load(args.transfer_weights, map_location="cpu")
