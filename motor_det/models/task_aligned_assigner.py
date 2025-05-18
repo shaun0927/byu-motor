@@ -24,8 +24,11 @@ def compute_max_iou_anchor(ious: Tensor) -> Tensor:
     return is_max_iou.type_as(ious)
 
 
-def gather_topk_anchors(metrics: Tensor, topk: int, largest: bool = True, topk_mask: Optional[Tensor] = None, eps: float = 1e-9) -> Tensor:
+def gather_topk_anchors(
+    metrics: Tensor, topk: int, largest: bool = True, topk_mask: Optional[Tensor] = None, eps: float = 1e-9
+) -> Tensor:
     num_anchors = metrics.shape[-1]
+    topk = min(topk, num_anchors)
     topk_metrics, topk_idxs = torch.topk(metrics, topk, dim=-1, largest=largest)
     if topk_mask is None:
         topk_mask = (topk_metrics.max(dim=-1, keepdim=True).values > eps).type_as(metrics)
@@ -33,7 +36,11 @@ def gather_topk_anchors(metrics: Tensor, topk: int, largest: bool = True, topk_m
     return is_in_topk * topk_mask
 
 
-def check_points_inside_bboxes(anchor_points: Tensor, gt_centers: Tensor, gt_radius: Tensor, eps: float = 0.05) -> Tensor:
+def check_points_inside_bboxes(
+    anchor_points: Tensor, gt_centers: Tensor, gt_radius: Tensor, eps: float = 0.05
+) -> Tensor:
+    if anchor_points.ndim == 2:
+        anchor_points = anchor_points.unsqueeze(0).expand(gt_centers.size(0), -1, -1)
     iou = batch_pairwise_keypoints_iou(anchor_points, gt_centers, gt_radius)
     return (iou > eps).type_as(gt_centers)
 
@@ -72,7 +79,9 @@ class TaskAlignedAssigner(nn.Module):
             anchor_points = anchor_points.unsqueeze(0).expand(batch_size, -1, -1)
 
         if num_max_boxes == 0:
-            assigned_labels = torch.full([batch_size, num_anchors], bg_index, dtype=torch.long, device=true_labels.device)
+            assigned_labels = torch.full(
+                [batch_size, num_anchors], bg_index, dtype=torch.long, device=true_labels.device
+            )
             assigned_points = torch.zeros([batch_size, num_anchors, 3], device=true_labels.device)
             assigned_scores = torch.zeros([batch_size, num_anchors, num_classes], device=true_labels.device)
             assigned_sigmas = torch.zeros([batch_size, num_anchors], device=true_labels.device)
@@ -85,7 +94,9 @@ class TaskAlignedAssigner(nn.Module):
         bbox_cls_scores = pred_scores[gt_labels_ind[..., 0], gt_labels_ind[..., 1]]
 
         alignment_metrics = bbox_cls_scores.pow(self.alpha) * ious.pow(self.beta)
-        is_in_gts = check_points_inside_bboxes(anchor_points, true_centers, true_sigmas, eps=self.assigned_min_iou_for_anchor)
+        is_in_gts = check_points_inside_bboxes(
+            anchor_points, true_centers, true_sigmas, eps=self.assigned_min_iou_for_anchor
+        )
         is_in_topk = gather_topk_anchors(alignment_metrics * is_in_gts, self.topk, topk_mask=pad_gt_mask)
         mask_positive = is_in_topk * is_in_gts * pad_gt_mask
 
@@ -100,7 +111,9 @@ class TaskAlignedAssigner(nn.Module):
         assigned_gt_index = assigned_gt_index + batch_ind * num_max_boxes
         assigned_labels = torch.gather(true_labels.flatten(), index=assigned_gt_index.flatten(), dim=0)
         assigned_labels = assigned_labels.reshape([batch_size, num_anchors])
-        assigned_labels = torch.where(mask_positive_sum > 0, assigned_labels, torch.full_like(assigned_labels, bg_index))
+        assigned_labels = torch.where(
+            mask_positive_sum > 0, assigned_labels, torch.full_like(assigned_labels, bg_index)
+        )
 
         assigned_points = true_centers.reshape([-1, 3])[assigned_gt_index.flatten(), :]
         assigned_points = assigned_points.reshape([batch_size, num_anchors, 3])
@@ -111,7 +124,9 @@ class TaskAlignedAssigner(nn.Module):
         assigned_scores = torch.nn.functional.one_hot(assigned_labels, num_classes + 1)
         ind = list(range(num_classes + 1))
         ind.remove(bg_index)
-        assigned_scores = torch.index_select(assigned_scores, index=torch.tensor(ind, device=assigned_scores.device, dtype=torch.long), dim=-1)
+        assigned_scores = torch.index_select(
+            assigned_scores, index=torch.tensor(ind, device=assigned_scores.device, dtype=torch.long), dim=-1
+        )
 
         alignment_metrics *= mask_positive
         max_metrics_per_instance = alignment_metrics.max(dim=-1, keepdim=True).values
