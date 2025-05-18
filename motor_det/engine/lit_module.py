@@ -4,6 +4,7 @@ from typing import Dict, Tuple
 import lightning as L
 import torch
 from torch import nn, Tensor
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from motor_det.model.net import MotorDetNet
 from motor_det.loss.losses import motor_detection_loss
@@ -105,12 +106,9 @@ class LitMotorDet(L.LightningModule):
         self._val_outputs.append({"tp": tp_t, "fp": fp_t, "fn": fn_t})
 
         # (선택) 스텝 단위 로그
-        self.log_dict(
-            {"val/f2_step": f2, "val/prec_step": prec, "val/rec_step": rec},
-            on_step=True,
-            on_epoch=False,
-            prog_bar=True,
-        )
+        # 각 배치에 대한 세부 지표는 훈련 진행 표시를 지나치게
+        # 복잡하게 만들 수 있으므로 더 이상 기록하지 않는다.
+        # 필요한 경우 이벤트 파일에서 직접 값을 확인한다.
 
         return {"tp": tp_t, "fp": fp_t, "fn": fn_t}
 
@@ -142,6 +140,12 @@ class LitMotorDet(L.LightningModule):
             prog_bar=True,
             on_step=False,
             on_epoch=True,
+        )
+
+        # 검증 루프 종료 후 주요 지표를 콘솔에도 출력한다.
+        rank_zero_info(
+            f"[VAL] step {self.global_step:>6}: "
+            f"f2={f2:.4f}, tp={int(tp)}, fp={int(fp)}, fn={int(fn)}"
         )
 
         # → Lightning 2.x 에서는 반환값이 필요 없으므로 그냥 종료

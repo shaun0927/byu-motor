@@ -70,6 +70,12 @@ python -m motor_det.engine.train \
 ```bash
 tensorboard --logdir runs
 ```
+TensorBoard를 사용할 수 없는 환경이라면 이벤트 파일을 직접 읽어 지표를 확인할 수 있습니다. 다음 스크립트가 `val/f2`, `val/tp` 등 주요 값을 스텝별로 출력합니다:
+
+```bash
+python -m motor_det.utils.event_reader runs/motor_fold0
+```
+
 
 ## 추론
 
