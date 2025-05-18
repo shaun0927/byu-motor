@@ -17,6 +17,71 @@ import torch
 from motor_det.data.module import MotorDataModule
 from motor_det.engine.lit_module import LitMotorDet
 from motor_det.callbacks.freeze_backbone import FreezeBackbone
+from motor_det.config import TrainingConfig
+
+
+# ---------------------------------------------------------------------- #
+def train(cfg: TrainingConfig) -> L.Trainer:
+    """Train model using the provided configuration."""
+
+    dm = MotorDataModule(
+        data_root=cfg.data_root,
+        fold=cfg.fold,
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        persistent_workers=cfg.persistent_workers,
+        positive_only=cfg.positive_only,
+        train_num_instance_crops=cfg.train_num_instance_crops,
+        train_num_random_crops=cfg.train_num_random_crops,
+        train_include_sliding_dataset=cfg.train_include_sliding_dataset,
+        train_crop_size=cfg.train_crop_size,
+        valid_crop_size=cfg.valid_crop_size,
+        pin_memory=cfg.pin_memory,
+        prefetch_factor=cfg.prefetch_factor,
+        use_gpu_augment=cfg.use_gpu_augment,
+        valid_use_gpu_augment=cfg.valid_use_gpu_augment,
+        mixup_prob=cfg.mixup_prob,
+        cutmix_prob=cfg.cutmix_prob,
+        copy_paste_prob=cfg.copy_paste_prob,
+        copy_paste_limit=cfg.copy_paste_limit,
+    )
+    dm.setup()
+
+    total_steps = cfg.max_steps or len(dm.train_dataloader()) * cfg.epochs
+    model = LitMotorDet(
+        lr=cfg.lr,
+        weight_decay=cfg.weight_decay,
+        total_steps=total_steps,
+        nms_algorithm=cfg.nms_algorithm,
+        nms_switch_thr=cfg.nms_switch_thr,
+        prob_thr=cfg.prob_thr,
+        focal_gamma=cfg.focal_gamma,
+        pos_weight_clip=cfg.pos_weight_clip,
+    )
+    if cfg.transfer_weights:
+        ckpt = torch.load(cfg.transfer_weights, map_location="cpu")
+        model.load_state_dict(ckpt.get("state_dict", ckpt), strict=False)
+
+    callbacks = []
+    if cfg.freeze_backbone_epochs > 0:
+        callbacks.append(FreezeBackbone(cfg.freeze_backbone_epochs))
+
+    trainer = L.Trainer(
+        accelerator="gpu" if cfg.gpus else "cpu",
+        devices=cfg.gpus or 1,
+        precision="16-mixed",
+        max_epochs=cfg.epochs,
+        max_steps=cfg.max_steps,
+        default_root_dir=Path("runs") / f"motor_fold{cfg.fold}",
+        log_every_n_steps=50,
+        val_check_interval=cfg.val_check_interval,
+        limit_val_batches=cfg.limit_val_batches,
+        num_sanity_val_steps=cfg.num_sanity_val_steps,
+        callbacks=callbacks,
+    )
+
+    trainer.fit(model, datamodule=dm)
+    return trainer
 
 
 # ---------------------------------------------------------------------- #
@@ -77,8 +142,7 @@ def main() -> None:
     L.seed_everything(42)
     torch.set_float32_matmul_precision("high")
 
-    # ---------------- Data ----------------
-    dm = MotorDataModule(
+    cfg = TrainingConfig(
         data_root=args.data_root,
         fold=args.fold,
         batch_size=args.batch_size,
@@ -98,41 +162,20 @@ def main() -> None:
         cutmix_prob=args.cutmix,
         copy_paste_prob=args.copy_paste,
         copy_paste_limit=args.copy_paste_limit,
-    )
-    dm.setup()
-
-    # ---------------- Model ----------------
-    total_steps = args.max_steps or len(dm.train_dataloader()) * args.epochs
-    model = LitMotorDet(
+        epochs=args.epochs,
         lr=args.lr,
         weight_decay=args.weight_decay,
-        total_steps=total_steps,
+        transfer_weights=args.transfer_weights,
+        freeze_backbone_epochs=args.freeze_backbone_epochs,
+        gpus=args.gpus,
         prob_thr=args.prob_thr,
-    )
-    if args.transfer_weights:
-        ckpt = torch.load(args.transfer_weights, map_location="cpu")
-        model.load_state_dict(ckpt.get("state_dict", ckpt), strict=False)
-
-    # ---------------- Trainer --------------      
-    callbacks = []
-    if args.freeze_backbone_epochs > 0:
-        callbacks.append(FreezeBackbone(args.freeze_backbone_epochs))
-
-    trainer = L.Trainer(
-        accelerator="gpu" if args.gpus else "cpu",
-        devices=args.gpus or 1,
-        precision="16-mixed",
-        max_epochs=args.epochs,
         max_steps=args.max_steps,
-        default_root_dir=Path("runs") / f"motor_fold{args.fold}",
-        log_every_n_steps=50,
-        val_check_interval=args.val_check_interval,
         limit_val_batches=args.limit_val_batches,
+        val_check_interval=args.val_check_interval,
         num_sanity_val_steps=args.num_sanity_val_steps,
-        callbacks=callbacks,
     )
 
-    trainer.fit(model, datamodule=dm)
+    train(cfg)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import time
 import lightning as L
 import torch
 
-from motor_det.engine.train import train
+import motor_det.engine.train as train_engine
 from motor_det.config import TrainingConfig
 
 DATA_ROOT = r"D:\project\Kaggle\BYU\byu-motor\data"
@@ -30,5 +30,5 @@ cfg = TrainingConfig(
 )
 
 start = time.time()
-train(cfg)
+train_engine.train(cfg)
 print(f"\u2714\ufe0e 전체 학습+검증 완료  in {time.time() - start:.1f}s")
