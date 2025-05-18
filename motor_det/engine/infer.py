@@ -60,6 +60,8 @@ def infer_single_tomo(
     device: torch.device,
     early_exit_thr: float | None = None,
     flip_tta: bool = False,
+    num_tiles: Tuple[int, int, int] | None = None,
+    tile_xy: int | None = None,
 ) -> np.ndarray:
     """Return predicted motor centre for one tomogram in Å units."""
 
@@ -69,6 +71,7 @@ def infer_single_tomo(
         stride=stride,
         dtype=np.float32,
         cache_size=64,
+        num_tiles=num_tiles,
     )
     loader = DataLoader(
         ds,
@@ -122,13 +125,30 @@ def infer_single_tomo(
                     offs_b = offs_np[b, :, :dz, :dy, :dx]
                     hann_bds = hann[:dz, :dy, :dx]
 
-                    slz = slice(oz, oz + dz)
-                    sly = slice(oy, oy + dy)
-                    slx = slice(ox, ox + dx)
+                    if tile_xy is None:
+                        slz = slice(oz, oz + dz)
+                        sly = slice(oy, oy + dy)
+                        slx = slice(ox, ox + dx)
 
-                    acc_prob[slz, sly, slx] += prob_b * hann_bds
-                    acc_offs[:, slz, sly, slx] += offs_b * hann_bds
-                    acc_w[slz, sly, slx] += hann_bds
+                        acc_prob[slz, sly, slx] += prob_b * hann_bds
+                        acc_offs[:, slz, sly, slx] += offs_b * hann_bds
+                        acc_w[slz, sly, slx] += hann_bds
+                    else:
+                        t = int(tile_xy)
+                        for zz in range(dz):
+                            for yy in range(0, dy, t):
+                                for xx in range(0, dx, t):
+                                    pr = prob_b[zz, yy : yy + t, xx : xx + t]
+                                    of = offs_b[:, zz, yy : yy + t, xx : xx + t]
+                                    hw = hann_bds[zz, yy : yy + t, xx : xx + t]
+
+                                    slz = slice(oz + zz, oz + zz + 1)
+                                    sly = slice(oy + yy, oy + yy + pr.shape[0])
+                                    slx = slice(ox + xx, ox + xx + pr.shape[1])
+
+                                    acc_prob[slz, sly, slx] += pr * hw
+                                    acc_offs[:, slz, sly, slx] += of * hw
+                                    acc_w[slz, sly, slx] += hw
 
             if early_exit_thr is not None and acc_prob.max() >= early_exit_thr:
                 break
@@ -186,6 +206,10 @@ def run_inference(
             device=device,
             early_exit_thr=cfg.early_exit,
             flip_tta=cfg.flip_tta,
+            num_tiles=(cfg.num_tiles_d, cfg.num_tiles_h, cfg.num_tiles_w)
+            if cfg.num_tiles_d is not None
+            else None,
+            tile_xy=cfg.tile_xy,
         )
         if ctrs.size == 0:
             rows.append([tid, -1, -1, -1])

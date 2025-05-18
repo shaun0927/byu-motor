@@ -10,7 +10,7 @@ import numpy as np
 import zarr
 from torch.utils.data import Dataset
 
-__all__ = ["SlidingWindowDataset", "compute_tiles"]
+__all__ = ["SlidingWindowDataset", "compute_tiles", "compute_tiles_with_num_tiles"]
 
 
 def compute_tiles(
@@ -33,6 +33,36 @@ def compute_tiles(
     return tiles
 
 
+def compute_tiles_with_num_tiles(
+    vol_shape: Tuple[int, int, int],
+    win: Tuple[int, int, int] = (192, 128, 128),
+    num_tiles: Tuple[int, int, int] = (1, 9, 9),
+) -> List[Tuple[slice, slice, slice]]:
+    """Return tiles using a fixed number along each dimension."""
+    dz, dy, dx = win
+    nz, ny, nx = num_tiles
+    Z, Y, X = vol_shape
+
+    def starts(L: int, w: int, n: int) -> List[int]:
+        if n <= 1:
+            return [max(0, (L - w) // 2)]
+        return [int(round(v)) for v in np.linspace(0, max(0, L - w), n)]
+
+    z_starts = starts(Z, dz, nz)
+    y_starts = starts(Y, dy, ny)
+    x_starts = starts(X, dx, nx)
+
+    tiles = []
+    for z0 in z_starts:
+        for y0 in y_starts:
+            for x0 in x_starts:
+                z1 = min(z0 + dz, Z)
+                y1 = min(y0 + dy, Y)
+                x1 = min(x0 + dx, X)
+                tiles.append((slice(z0, z1), slice(y0, y1), slice(x0, x1)))
+    return tiles
+
+
 class SlidingWindowDataset(Dataset):
     """
     Lazily reads patches from a Zarr tomogram.
@@ -46,18 +76,22 @@ class SlidingWindowDataset(Dataset):
         dtype=np.float32,
         *,
         cache_size: int = 128,
+        num_tiles: Tuple[int, int, int] | None = None,
     ):
         self.store = zarr.open(zarr_path, mode="r")  # no copy ✓
         self.win = window  # <─★ win 로 한 번 더 보관
         self.window = window
         self.stride = stride
+        self.num_tiles = num_tiles
         self.dtype = dtype
         self._cache_size = int(cache_size)
         self._patch_cache: OrderedDict[Tuple[int, int, int], np.ndarray] = OrderedDict()
 
     @torch.cached_property
     def tiles(self) -> List[Tuple[slice, slice, slice]]:
-        return compute_tiles(self.store.shape, self.window, self.stride)
+        if self.num_tiles is None:
+            return compute_tiles(self.store.shape, self.window, self.stride)
+        return compute_tiles_with_num_tiles(self.store.shape, self.window, self.num_tiles)
 
     def __len__(self):
         return len(self.tiles)

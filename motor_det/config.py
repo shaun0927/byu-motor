@@ -110,6 +110,12 @@ class InferenceConfig:
     batch: int = 1
     num_workers: int = 4
 
+    # optional sliding window tiling
+    num_tiles_d: int | None = None
+    num_tiles_h: int | None = None
+    num_tiles_w: int | None = None
+    tile_xy: int | None = None
+
     prob_thr: float = 0.6
     sigma: float = 60.0
     iou_thr: float = 0.25
