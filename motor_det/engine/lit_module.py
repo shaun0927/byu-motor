@@ -27,7 +27,7 @@ class LitMotorDet(L.LightningModule):
         total_steps: int = 30_000,
         nms_algorithm: str = "vectorized",
         nms_switch_thr: int = 1500,
-        prob_thr: float = 0.6,
+        prob_thr: float = 0.1,
         focal_gamma: float = 2.0,
         pos_weight_clip: float = 5.0,
     ):
