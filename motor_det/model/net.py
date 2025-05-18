@@ -12,9 +12,14 @@ class MotorDetNet(nn.Module):
         super().__init__()
         self.backbone = MotorBackbone()
 
-        self.head_s4 = ObjectDetectionHead(64, 1, stride=4)
-        self.head_s8 = ObjectDetectionHead(128, 1, stride=8)
-        self.head_s16 = ObjectDetectionHead(256, 1, stride=16)
+        # Channel dimensions for the feature maps produced by ``MotorBackbone``
+        # are 32, 64 and 128 at strides 4, 8 and 16 respectively.  The detection
+        # heads were incorrectly initialised with doubled channel sizes which
+        # resulted in shape mismatch errors during training.  Initialise each
+        # head with the correct number of input channels.
+        self.head_s4 = ObjectDetectionHead(32, 1, stride=4)
+        self.head_s8 = ObjectDetectionHead(64, 1, stride=8)
+        self.head_s16 = ObjectDetectionHead(128, 1, stride=16)
 
     @property
     def strides(self):
