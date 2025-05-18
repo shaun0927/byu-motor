@@ -25,6 +25,7 @@ def compute_max_iou_anchor(ious: Tensor) -> Tensor:
 
 
 def gather_topk_anchors(
+
     metrics: Tensor, topk: int, largest: bool = True, topk_mask: Optional[Tensor] = None, eps: float = 1e-9
 ) -> Tensor:
     num_anchors = metrics.shape[-1]
@@ -37,6 +38,13 @@ def gather_topk_anchors(
 
 
 def check_points_inside_bboxes(
+    """Return indicator if anchors fall inside the GT spheres.
+
+    ``anchor_points`` may be 2‑D ``[N,3]`` or 3‑D ``[B,N,3]``.  When 2‑D, expand
+    across the batch to match ``gt_centers``.
+    """
+    if anchor_points.ndim == 2:
+        anchor_points = anchor_points.unsqueeze(0).expand(gt_centers.size(0), -1, -1)
     anchor_points: Tensor, gt_centers: Tensor, gt_radius: Tensor, eps: float = 0.05
 ) -> Tensor:
     if anchor_points.ndim == 2:
