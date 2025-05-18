@@ -12,6 +12,7 @@ __all__ = [
     "decode_detections",
     "decode_with_nms",
     "vectorized_nms",
+    "decode_multiscale_with_nms",
 ]
 
 
@@ -115,6 +116,43 @@ def decode_with_nms(
     centers_batch = decode_detections(logits, offsets, stride, prob_thr)
     results: List[torch.Tensor] = []
     for c in centers_batch:
+        algo = algorithm
+        if algo == "vectorized" and c.size(0) > switch_thr:
+            algo = "greedy"
+        if algo == "greedy":
+            results.append(greedy_nms(c, sigma, iou_thr))
+        else:
+            results.append(vectorized_nms(c, sigma, iou_thr))
+    return results
+
+
+def decode_multiscale_with_nms(
+    logits_list: list[torch.Tensor],
+    offsets_list: list[torch.Tensor],
+    strides: list[int],
+    prob_thr: float = 0.02,
+    sigma: float = 60.0,
+    iou_thr: float = 0.25,
+    algorithm: str = "vectorized",
+    switch_thr: int = 1500,
+) -> list[torch.Tensor]:
+    """Decode and merge multi-scale outputs with NMS."""
+
+    B = logits_list[0].size(0)
+    centers_all = [torch.empty((0, 3), device=logits_list[0].device) for _ in range(B)]
+
+    for logits, offsets, stride in zip(logits_list, offsets_list, strides):
+        anchors = anchors_for_offsets_feature_map(logits.shape[-3:], stride, logits.device)
+        coords = anchors.unsqueeze(0) + offsets
+        prob = logits.sigmoid()
+        for b in range(B):
+            mask = prob[b, 0] >= prob_thr
+            if mask.any():
+                pts = coords[b, :, mask].T
+                centers_all[b] = torch.cat([centers_all[b], pts], dim=0)
+
+    results: list[torch.Tensor] = []
+    for c in centers_all:
         algo = algorithm
         if algo == "vectorized" and c.size(0) > switch_thr:
             algo = "greedy"

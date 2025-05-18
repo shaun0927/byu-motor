@@ -8,9 +8,10 @@ from torch import nn, Tensor
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
 from motor_det.model.net import MotorDetNet
-from motor_det.loss.losses import motor_detection_loss
+from motor_det.loss.losses import motor_detection_loss, task_aligned_detection_loss
 from motor_det.optim.cosine_with_warmup import WarmupCosineScheduler
-from motor_det.postprocess.decoder import decode_with_nms
+from motor_det.postprocess.decoder import decode_multiscale_with_nms
+from motor_det.models.task_aligned_assigner import TaskAlignedAssigner
 from motor_det.metrics.det_metric  import fbeta_score
 
 
@@ -52,6 +53,12 @@ class LitMotorDet(L.LightningModule):
                     warnings.warn("torch.compile failed; continuing without compilation", stacklevel=2)
 
         self.net: nn.Module = net
+        self.assigner = TaskAlignedAssigner(
+            max_anchors_per_point=13,
+            assigned_min_iou_for_anchor=0.05,
+            alpha=1.0,
+            beta=6.0,
+        )
 
     # ------------------------------------------------ #
     def forward(self, x: Tensor) -> Dict[str, Tensor]:
@@ -60,11 +67,15 @@ class LitMotorDet(L.LightningModule):
     # ------------------------------------------------ #
     def _shared_step(self, batch: Dict[str, Tensor], stage: str):
         preds = self(batch["image"])
-        loss, logs = motor_detection_loss(
-            preds,
-            batch,
-            focal_gamma=self.hparams.focal_gamma,
-            pos_weight_clip=self.hparams.pos_weight_clip,
+        loss, logs = task_aligned_detection_loss(
+            preds["logits"],
+            preds["offsets"],
+            preds["strides"],
+            batch["centers_Å"],
+            batch["spacing_Å_per_voxel"],
+            self.assigner,
+            alpha=0.75,
+            gamma=self.hparams.focal_gamma,
         )
         logs = {f"{stage}/{k}": v for k, v in logs.items()}
         batch_size = batch["image"].size(0)
@@ -87,13 +98,13 @@ class LitMotorDet(L.LightningModule):
 
         # 2) 예측 → NMS
         preds    = self(batch["image"])
-        logits   = preds["cls"]
-        offsets  = preds["offset"]
+        logits   = preds["logits"]
+        offsets  = preds["offsets"]
 
-        centers_pred = decode_with_nms(
+        centers_pred = decode_multiscale_with_nms(
             logits,
             offsets,
-            stride=2,
+            preds["strides"],
             prob_thr=self.hparams.prob_thr,
             sigma=60.0,
             iou_thr=0.25,
