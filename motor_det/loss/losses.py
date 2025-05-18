@@ -183,16 +183,22 @@ def task_aligned_detection_loss(
         bg_index=0,
     )
 
-    label_mask = (lbl > 0).unsqueeze(-1)
-    cls_loss = varifocal_loss(pred_logits.squeeze(-1), tgt_scr.squeeze(-1), label_mask.float(), alpha=alpha, gamma=gamma)
+    label_mask = lbl > 0
+    cls_loss = varifocal_loss(
+        pred_logits.squeeze(-1),
+        tgt_scr.squeeze(-1),
+        label_mask.float(),
+        alpha=alpha,
+        gamma=gamma,
+    )
 
     if label_mask.any():
         diff2 = (pred_centers - tgt_ctr).pow(2).sum(dim=-1)
         iou = torch.exp(-diff2 / (2 * tgt_sigma**2))
-        iou_loss = (1 - iou[label_mask.squeeze(-1)]).mean()
+        iou_loss = (1 - iou[label_mask]).mean()
         l1 = F.smooth_l1_loss(
-            pred_centers[label_mask.squeeze(-1)],
-            tgt_ctr[label_mask.squeeze(-1)],
+            pred_centers[label_mask],
+            tgt_ctr[label_mask],
             reduction="mean",
         )
         reg_loss = iou_loss + l1
