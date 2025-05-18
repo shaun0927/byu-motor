@@ -65,6 +65,8 @@ def parse_args():
         default=0,
         help="Number of sanity validation steps to run before training",
     )
+    p.add_argument("--focal_gamma", type=float, default=2.0, help="Focal loss exponent")
+    p.add_argument("--pos_weight_clip", type=float, default=5.0, help="Max positive weight")
     p.add_argument(
         "--env_prefix",
         type=str,
@@ -103,6 +105,8 @@ def train(cfg: TrainingConfig):
         total_steps=total_steps,
         nms_algorithm=cfg.nms_algorithm,
         nms_switch_thr=cfg.nms_switch_thr,
+        focal_gamma=cfg.focal_gamma,
+        pos_weight_clip=cfg.pos_weight_clip,
     )
 
     if cfg.transfer_weights:
@@ -172,6 +176,8 @@ def main() -> None:
     cfg.limit_val_batches = args.limit_val_batches
     cfg.val_check_interval = args.val_check_interval
     cfg.num_sanity_val_steps = args.num_sanity_val_steps
+    cfg.focal_gamma = args.focal_gamma
+    cfg.pos_weight_clip = args.pos_weight_clip
 
     train(cfg)
 

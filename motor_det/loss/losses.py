@@ -22,6 +22,9 @@ def motor_detection_loss(
     pred: Dict[str, Tensor],
     batch: Dict[str, Tensor],
     lambda_offset: float = 1.0,
+    *,
+    focal_gamma: float = 2.0,
+    pos_weight_clip: float = 5.0,
     pos_weight: Tensor | None = None,
 ) -> Tuple[Tensor, Dict[str, float]]:
     """
@@ -30,6 +33,11 @@ def motor_detection_loss(
     loss  : scalar tensor
     logs  : dict(str -> float)  (for Lightning self.log_dict)
     pos_weight : optional positive class weight for BCEWithLogits
+
+    Parameters
+    ----------
+    focal_gamma : exponent for focal loss.  Set ``None`` to disable.
+    pos_weight_clip : maximum allowed positive weight to prevent large imbalance.
     """
     # ─── 1. 분리 ───────────────────────────────────────────────
     pred_cls:  Tensor = pred["cls"]    # (B,1,D',H',W')
@@ -43,15 +51,24 @@ def motor_detection_loss(
         if pos_weight is None:
             pos = gt_cls.sum()
             neg = gt_cls.numel() - pos
-            w = (neg / pos) if pos > 0 else 1.0
-            pos_weight = torch.tensor(float(w), device=pred_cls.device)
-        bce = F.binary_cross_entropy_with_logits(
+            w = (neg / (pos + 1e-9)) if pos > 0 else 1.0
+            w = float(min(w, pos_weight_clip))
+            pos_weight = torch.tensor(w, device=pred_cls.device)
+
+        bce_raw = F.binary_cross_entropy_with_logits(
             pred_cls.float(),       # logits (32-bit)
             gt_cls.float(),
             weight=None,
             pos_weight=pos_weight,
-            reduction="mean",
+            reduction="none",
         )
+
+        if focal_gamma is not None and focal_gamma > 0:
+            prob = torch.sigmoid(pred_cls.float())
+            pt = prob * gt_cls + (1.0 - prob) * (1.0 - gt_cls)
+            bce_raw = bce_raw * ((1.0 - pt) ** focal_gamma)
+
+        bce = bce_raw.mean()
 
     # ─── 3. Offset L1 (positive 위치에서만) ──────────────────
     pos_mask: Tensor = gt_cls.bool()                 # (B,1,D',H',W')
