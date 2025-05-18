@@ -27,6 +27,8 @@ class LitMotorDet(L.LightningModule):
         total_steps: int = 30_000,
         nms_algorithm: str = "vectorized",
         nms_switch_thr: int = 1500,
+        focal_gamma: float = 2.0,
+        pos_weight_clip: float = 5.0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -57,7 +59,12 @@ class LitMotorDet(L.LightningModule):
     # ------------------------------------------------ #
     def _shared_step(self, batch: Dict[str, Tensor], stage: str):
         preds = self(batch["image"])
-        loss, logs = motor_detection_loss(preds, batch)
+        loss, logs = motor_detection_loss(
+            preds,
+            batch,
+            focal_gamma=self.hparams.focal_gamma,
+            pos_weight_clip=self.hparams.pos_weight_clip,
+        )
         logs = {f"{stage}/{k}": v for k, v in logs.items()}
         batch_size = batch["image"].size(0)
         self.log_dict(logs, prog_bar=True, on_step=True, on_epoch=True,

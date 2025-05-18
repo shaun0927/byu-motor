@@ -85,6 +85,8 @@ class TrainingConfig:
     limit_val_batches: float | int = 1.0
     val_check_interval: float | int = 1.0
     num_sanity_val_steps: int = 0
+    focal_gamma: float = 2.0
+    pos_weight_clip: float = 5.0
 
     @classmethod
     def load(cls, path: str | Path | None = None, *, env_prefix: str | None = "BYU_TRAIN_") -> "TrainingConfig":

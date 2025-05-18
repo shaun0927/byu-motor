@@ -81,7 +81,7 @@ class MotorTrainDataset(Dataset):
         center_xyz: np.ndarray,  # shape (N,3) in Å
         voxel_spacing: float,  # Å/voxel
         crop_size: Tuple[int, int, int] = (96, 128, 128),
-        negative_ratio: float = 0.5,
+        negative_ratio: float = 0.2,
         cache_size: int = 128,
         *,
         use_gpu: bool = True,
