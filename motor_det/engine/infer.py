@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from motor_det.config import InferenceConfig
-from motor_det.data.sliding_window import SlidingWindowDataset
+from motor_det.data.detection import SlidingWindowDataset
 from motor_det.model.net import MotorDetNet
 from motor_det.utils.voxel import read_test_ids, voxel_spacing_map
 
@@ -97,8 +97,9 @@ def infer_single_tomo(
         orientations += [(0,), (1,), (2,)]
 
     with amp_ctx():
-        for patches, origins in tqdm(loader, desc=zarr_path.stem, leave=False):
-            patches = patches.to(device, non_blocking=True) / 255.0
+        for batch in tqdm(loader, desc=zarr_path.stem, leave=False):
+            patches = batch["image"].to(device, non_blocking=True)
+            origins = batch["origin"]
             for axes in orientations:
                 p = patches
                 if axes:

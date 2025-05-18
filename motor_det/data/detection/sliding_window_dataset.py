@@ -1,14 +1,15 @@
-# motor_det/data/sliding_window.py
 from __future__ import annotations
+
 from pathlib import Path
 from typing import List, Tuple
 from collections import OrderedDict
 
-import torch
-
 import numpy as np
+import torch
 import zarr
 from torch.utils.data import Dataset
+
+from .mixin import ObjectDetectionMixin
 
 __all__ = ["SlidingWindowDataset", "compute_tiles", "compute_tiles_with_num_tiles"]
 
@@ -18,7 +19,6 @@ def compute_tiles(
     win: Tuple[int, int, int] = (192, 128, 128),
     stride: Tuple[int, int, int] = (96, 64, 64),
 ) -> List[Tuple[slice, slice, slice]]:
-    """Return list[ (z-slice, y-slice, x-slice) ] that covers the volume."""
     dz, dy, dx = win
     sz, sy, sx = stride
     Z, Y, X = vol_shape
@@ -38,7 +38,6 @@ def compute_tiles_with_num_tiles(
     win: Tuple[int, int, int] = (192, 128, 128),
     num_tiles: Tuple[int, int, int] = (1, 9, 9),
 ) -> List[Tuple[slice, slice, slice]]:
-    """Return tiles using a fixed number along each dimension."""
     dz, dy, dx = win
     nz, ny, nx = num_tiles
     Z, Y, X = vol_shape
@@ -63,10 +62,8 @@ def compute_tiles_with_num_tiles(
     return tiles
 
 
-class SlidingWindowDataset(Dataset):
-    """
-    Lazily reads patches from a Zarr tomogram.
-    """
+class SlidingWindowDataset(Dataset, ObjectDetectionMixin):
+    """Lazily reads patches from a Zarr tomogram."""
 
     def __init__(
         self,
@@ -77,13 +74,15 @@ class SlidingWindowDataset(Dataset):
         *,
         cache_size: int = 128,
         num_tiles: Tuple[int, int, int] | None = None,
-    ):
-        self.store = zarr.open(zarr_path, mode="r")  # no copy ✓
-        self.win = window  # <─★ win 로 한 번 더 보관
+        voxel_spacing: float = 1.0,
+    ) -> None:
+        self.store = zarr.open(zarr_path, mode="r")
+        self.win = window
         self.window = window
         self.stride = stride
         self.num_tiles = num_tiles
         self.dtype = dtype
+        self.spacing = float(voxel_spacing)
         self._cache_size = int(cache_size)
         self._patch_cache: OrderedDict[Tuple[int, int, int], np.ndarray] = OrderedDict()
 
@@ -107,7 +106,6 @@ class SlidingWindowDataset(Dataset):
             self._patch_cache[key] = patch
             if len(self._patch_cache) > self._cache_size:
                 self._patch_cache.popitem(last=False)
-        # pad if needed (right / bottom / back edge)
         dz, dy, dx = self.window
         pad = (
             (0, dz - patch.shape[0]),
@@ -116,4 +114,7 @@ class SlidingWindowDataset(Dataset):
         )
         if any(p[1] > 0 for p in pad):
             patch = np.pad(patch, pad, mode="constant")
-        return patch[None], (tz.start, ty.start, tx.start)  # (C=1, D,H,W), origin
+        return self.convert_to_dict(torch.from_numpy(patch), None, None, np.empty((0, 3), np.float32)) | {
+            "origin": (tz.start, ty.start, tx.start)
+        }
+
