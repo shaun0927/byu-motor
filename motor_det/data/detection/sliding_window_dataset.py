@@ -21,18 +21,29 @@ def compute_tiles(
     win: Tuple[int, int, int] = (192, 128, 128),
     stride: Tuple[int, int, int] = (96, 64, 64),
 ) -> List[Tuple[slice, slice, slice]]:
+    """Vectorised sliding window tile computation."""
+
     dz, dy, dx = win
     sz, sy, sx = stride
     Z, Y, X = vol_shape
-    tiles = []
-    for z0 in range(0, max(1, Z - dz + 1), sz):
-        for y0 in range(0, max(1, Y - dy + 1), sy):
-            for x0 in range(0, max(1, X - dx + 1), sx):
-                z1 = min(z0 + dz, Z)
-                y1 = min(y0 + dy, Y)
-                x1 = min(x0 + dx, X)
-                tiles.append((slice(z0, z1), slice(y0, y1), slice(x0, x1)))
-    return tiles
+
+    z_starts = np.arange(0, max(1, Z - dz + 1), sz, dtype=int)
+    y_starts = np.arange(0, max(1, Y - dy + 1), sy, dtype=int)
+    x_starts = np.arange(0, max(1, X - dx + 1), sx, dtype=int)
+
+    zz, yy, xx = np.meshgrid(z_starts, y_starts, x_starts, indexing="ij")
+    zz = zz.ravel()
+    yy = yy.ravel()
+    xx = xx.ravel()
+
+    z1 = np.minimum(zz + dz, Z)
+    y1 = np.minimum(yy + dy, Y)
+    x1 = np.minimum(xx + dx, X)
+
+    return [
+        (slice(int(z0), int(z1_)), slice(int(y0), int(y1_)), slice(int(x0), int(x1_)))
+        for z0, z1_, y0, y1_, x0, x1_ in zip(zz, z1, yy, y1, xx, x1)
+    ]
 
 
 def compute_tiles_with_num_tiles(
