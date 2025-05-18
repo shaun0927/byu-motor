@@ -99,7 +99,9 @@ class TaskAlignedAssigner(nn.Module):
         ious = batch_pairwise_keypoints_iou(pred_centers, true_centers, true_sigmas)
         pred_scores = pred_scores.permute(0, 2, 1)
         batch_ind = torch.arange(end=batch_size, dtype=true_labels.dtype, device=true_labels.device).unsqueeze(-1)
-        gt_labels_ind = torch.stack([batch_ind.tile([1, num_max_boxes]), true_labels.squeeze(-1)], dim=-1)
+        gt_labels_ind = torch.stack(
+            [batch_ind.tile([1, num_max_boxes]), true_labels.squeeze(-1) - 1], dim=-1
+        )
         bbox_cls_scores = pred_scores[gt_labels_ind[..., 0], gt_labels_ind[..., 1]]
 
         alignment_metrics = bbox_cls_scores.pow(self.alpha) * ious.pow(self.beta)
