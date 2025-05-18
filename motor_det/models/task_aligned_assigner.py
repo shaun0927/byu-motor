@@ -24,8 +24,21 @@ def compute_max_iou_anchor(ious: Tensor) -> Tensor:
     return is_max_iou.type_as(ious)
 
 
-def gather_topk_anchors(metrics: Tensor, topk: int, largest: bool = True, topk_mask: Optional[Tensor] = None, eps: float = 1e-9) -> Tensor:
+def gather_topk_anchors(
+    metrics: Tensor,
+    topk: int,
+    largest: bool = True,
+    topk_mask: Optional[Tensor] = None,
+    eps: float = 1e-9,
+) -> Tensor:
+    """Return mask of anchors falling in the top ``k`` metrics.
+
+    ``torch.topk`` requires ``k <= num_anchors``.  Some datasets may yield fewer
+    anchors than the configured ``topk``; clamp ``topk`` accordingly to avoid
+    CUDA index errors.
+    """
     num_anchors = metrics.shape[-1]
+    topk = min(topk, num_anchors)
     topk_metrics, topk_idxs = torch.topk(metrics, topk, dim=-1, largest=largest)
     if topk_mask is None:
         topk_mask = (topk_metrics.max(dim=-1, keepdim=True).values > eps).type_as(metrics)
@@ -33,7 +46,20 @@ def gather_topk_anchors(metrics: Tensor, topk: int, largest: bool = True, topk_m
     return is_in_topk * topk_mask
 
 
-def check_points_inside_bboxes(anchor_points: Tensor, gt_centers: Tensor, gt_radius: Tensor, eps: float = 0.05) -> Tensor:
+def check_points_inside_bboxes(
+    anchor_points: Tensor,
+    gt_centers: Tensor,
+    gt_radius: Tensor,
+    eps: float = 0.05,
+) -> Tensor:
+    """Return indicator if anchors fall inside the GT spheres.
+
+    ``anchor_points`` may be 2‑D ``[N,3]`` or 3‑D ``[B,N,3]``.  When 2‑D, expand
+    across the batch to match ``gt_centers``.
+    """
+    if anchor_points.ndim == 2:
+        anchor_points = anchor_points.unsqueeze(0).expand(gt_centers.size(0), -1, -1)
+
     iou = batch_pairwise_keypoints_iou(anchor_points, gt_centers, gt_radius)
     return (iou > eps).type_as(gt_centers)
 
