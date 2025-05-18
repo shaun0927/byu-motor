@@ -139,6 +139,8 @@ python -m motor_det.engine.infer \
 `quick_train_val.py`나 `motor_det/tests/test_quick_train.py` 등의 스크립트는 소규모 실험을 재현하기 위해 제공됩니다.
 
 CPU 기반 증강을 사용할 경우 `--pin_memory` 옵션을 적용하면 유용합니다. 기본적으로는 CUDA 증강을 사용하므로 해당 모드를 끄려면 먼저 `--cpu_augment`를 지정해야 합니다.
+여러 데이터 로더 워커를 사용하는 경우 GPU에서 증강을 수행하면 오히려 병목이 발생할 수 있습니다.
+그래서 워커 수가 1 이상이면 데이터셋이 자동으로 CPU 증강 모드로 전환되도록 구현되어 있습니다.
 
 ## 추가 추론 예시
 

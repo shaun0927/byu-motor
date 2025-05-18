@@ -19,6 +19,7 @@ cfg = TrainingConfig(
     batch_size=1,
     num_workers=12,
     persistent_workers=True,
+    use_gpu_augment=False,
     valid_use_gpu_augment=False,
     pin_memory=True,
     prefetch_factor=2,

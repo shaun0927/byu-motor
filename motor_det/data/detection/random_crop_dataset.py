@@ -5,6 +5,7 @@ from typing import Tuple
 
 import numpy as np
 import torch
+from torch.utils.data import get_worker_info
 import zarr
 
 from motor_det.utils.target import build_target_maps, build_target_maps_torch
@@ -70,7 +71,8 @@ class RandomCropDataset(DetectionDataset, PatchCacheMixin):
         )
         centers_local = self.centers[mask] - np.array([x0, y0, z0], np.float32)
 
-        if self.use_gpu:
+        use_gpu = self.use_gpu and get_worker_info() is None
+        if use_gpu:
             device = torch.device("cuda")
             centers_t = torch.as_tensor(centers_local, dtype=torch.float32, device=device)
             cls_map_t, off_map_t = build_target_maps_torch(
