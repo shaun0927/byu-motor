@@ -63,34 +63,10 @@ class InstanceCropDataset(DetectionDataset, PatchCacheMixin):
         return self.num_crops
 
     # sampling utilities -------------------------------------------------
-    def _compute_positive_start(self, center: np.ndarray, jitter: int = 8) -> tuple[int, int, int]:
-        """Calculate a jittered crop start around ``center`` without loading data."""
-        D, H, W = self.crop_size
-        Z, Y, X = self.vol.shape
-
-        ctr = center.astype(float)
-        if jitter:
-            ctr += np.random.randint(-jitter, jitter + 1, size=3)
-
-        start = ctr[[2, 1, 0]] - np.array(self.crop_size) / 2
-        start = np.round(start).astype(int)
-        start = np.clip(start, 0, np.maximum(0, np.array([Z - D, Y - H, X - W])))
-
-        end = start + np.array(self.crop_size)
-        cz, cy, cx = center[2], center[1], center[0]
-        if not (start[0] <= cz < end[0]):
-            start[0] = int(np.clip(cz - D // 2, 0, max(0, Z - D)))
-        if not (start[1] <= cy < end[1]):
-            start[1] = int(np.clip(cy - H // 2, 0, max(0, Y - H)))
-        if not (start[2] <= cx < end[2]):
-            start[2] = int(np.clip(cx - W // 2, 0, max(0, X - W)))
-        return tuple(start)
-
     def _sample_positive(self):
         idx = np.random.randint(len(self.centers))
         ctr = self.centers[idx]
-        start = self._compute_positive_start(ctr)
-        patch = self._load_patch_cached(self.vol, start, self.crop_size)
+        patch, start = random_crop_around_point(self.vol, ctr, self.crop_size)
         return patch, start
 
     def _sample_negative(self):
