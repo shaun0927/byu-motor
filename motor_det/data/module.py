@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 from pathlib import Path
 from motor_det.data.dataset import (
     MotorTrainDataset,
-    PositiveOnlyCropDataset,
+    MotorRandomPositiveCropDataset,
 )
 from motor_det.utils.collate import collate_with_centers
 from motor_det.utils.voxel import (
@@ -126,7 +126,7 @@ class MotorDataModule(L.LightningDataModule):
                 continue
 
             if self.positive_only:
-                ds = PositiveOnlyCropDataset(
+                ds = MotorRandomPositiveCropDataset(
                     zarr_path,
                     centers,
                     vx,
