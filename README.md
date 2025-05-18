@@ -186,3 +186,17 @@ python -m motor_det.engine.train \
   --num_workers 0 --no-persistent_workers
 ```
 
+
+### CUDA 메모리 부족
+
+GPU 메모리가 8GB 정도로 제한된 경우 기본 설정으로는 학습 과정에서 `CUDA out of memory` 오류가 발생할 수 있습니다. 다음과 같이 배치 크기를 줄이고 증강을 CPU에서 수행하도록 하면 메모리 사용량을 크게 줄일 수 있습니다.
+
+```bash
+python -m motor_det.engine.train \
+  --data_root <DATA_ROOT> \
+  --batch_size 1 \
+  --cpu_augment
+```
+
+필요하다면 `--train_depth`, `--train_spatial` 같은 크기 관련 인자도 감소시켜 추가적인 메모리를 절약할 수 있습니다.
+
