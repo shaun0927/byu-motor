@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 from pathlib import Path
 from motor_det.data.dataset import (
     MotorTrainDataset,
-    PositiveOnlyCropDataset,
+    MotorRandomPositiveCropDataset,
 )
 from motor_det.utils.collate import collate_with_centers
 from motor_det.utils.voxel import (
@@ -36,7 +36,7 @@ class MotorDataModule(L.LightningDataModule):
         batch_size: int = 2,
         num_workers: int = 12,
         persistent_workers: bool = True,
-        positive_only: bool = False,
+        positive_only: bool = True,
         train_crop_size: tuple[int, int, int] = (96, 128, 128),
         valid_crop_size: tuple[int, int, int] = (192, 128, 128),
         *,
@@ -126,7 +126,7 @@ class MotorDataModule(L.LightningDataModule):
                 continue
 
             if self.positive_only:
-                ds = PositiveOnlyCropDataset(
+                ds = MotorRandomPositiveCropDataset(
                     zarr_path,
                     centers,
                     vx,
