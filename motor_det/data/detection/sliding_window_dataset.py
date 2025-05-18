@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
+from functools import cached_property
 import zarr
 from torch.utils.data import Dataset
 
@@ -86,7 +87,7 @@ class SlidingWindowDataset(Dataset, ObjectDetectionMixin):
         self._cache_size = int(cache_size)
         self._patch_cache: OrderedDict[Tuple[int, int, int], np.ndarray] = OrderedDict()
 
-    @torch.cached_property
+    @cached_property
     def tiles(self) -> List[Tuple[slice, slice, slice]]:
         if self.num_tiles is None:
             return compute_tiles(self.store.shape, self.window, self.stride)
