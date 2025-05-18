@@ -77,6 +77,10 @@ python -m motor_det.utils.event_reader runs/motor_fold0
 ```
 
 
+학습 중에도 손실과 정밀도 같은 지표가 매 스텝마다 터미널에 출력되므로,
+TensorBoard 없이도 진행 상황을 바로 확인할 수 있습니다.
+
+
 ## 추론
 
 학습 후 예측은 다음과 같이 생성합니다.

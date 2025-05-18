@@ -3,6 +3,7 @@ from typing import Dict, Tuple
 
 import lightning as L
 import torch
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from torch import nn, Tensor
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
 
@@ -61,6 +62,14 @@ class LitMotorDet(L.LightningModule):
         batch_size = batch["image"].size(0)
         self.log_dict(logs, prog_bar=True, on_step=True, on_epoch=True,
                       batch_size=batch_size)
+
+        # Print metrics to the console for real-time monitoring
+        msg = (
+            f"[{stage.upper()}] step {self.global_step:>6}: "
+            + ", ".join(f"{k.split('/')[-1]}={float(v):.4f}" for k, v in logs.items())
+        )
+        rank_zero_info(msg)
+
         return loss
 
     def training_step(self, batch, _):
@@ -110,6 +119,11 @@ class LitMotorDet(L.LightningModule):
         # 복잡하게 만들 수 있으므로 더 이상 기록하지 않는다.
         # 필요한 경우 이벤트 파일에서 직접 값을 확인한다.
 
+        # Print step metrics to the console
+        rank_zero_info(
+            f"[VAL] step {self.global_step:>6}: f2={f2:.4f}, tp={tp}, fp={fp}, fn={fn}"
+        )
+
         return {"tp": tp_t, "fp": fp_t, "fn": fn_t}
 
     # ------------------------------------------------ #
@@ -142,10 +156,9 @@ class LitMotorDet(L.LightningModule):
             on_epoch=True,
         )
 
-        # 검증 루프 종료 후 주요 지표를 콘솔에도 출력한다.
+        # Print aggregated validation metrics
         rank_zero_info(
-            f"[VAL] step {self.global_step:>6}: "
-            f"f2={f2:.4f}, tp={int(tp)}, fp={int(fp)}, fn={int(fn)}"
+            f"[VAL] step {self.global_step:>6}: f2={f2:.4f}, tp={int(tp)}, fp={int(fp)}, fn={int(fn)}"
         )
 
         # → Lightning 2.x 에서는 반환값이 필요 없으므로 그냥 종료
